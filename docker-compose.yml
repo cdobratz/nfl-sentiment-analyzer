@@ -1,46 +1,50 @@
 version: '3.8'
 
 services:
-  frontend:
-    build:
-      context: ./frontend
+  mongodb:
+    image: mongo:latest
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  ml-service:
+    build: 
+      context: ./ml
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "8000:8000"
     environment:
-      - REACT_APP_API_URL=http://localhost:4000/api
-    depends_on:
-      - backend
+      - PORT=8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/models"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "4000:4000"
+      - "3000:3000"
     environment:
-      - NODE_ENV=development
-      - PORT=4000
-      - MONGODB_URI=mongodb://mongodb:27017/nfl_sentiment
+      - NODE_ENV=production
+      - ML_API_URL=http://ml-service:8000
+      - MONGODB_URI=mongodb://admin:password@mongodb:27017
     depends_on:
       - mongodb
-
-  mongodb:
-    image: mongo:latest
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-
-  ml_service:
-    build:
-      context: ./ml
-      dockerfile: Dockerfile
-    environment:
-      - MODEL_PATH=/app/models/sentiment_model.pkl
-      - VECTORIZER_PATH=/app/models/vectorizer.pkl
-    volumes:
-      - ./ml/models:/app/models
+      - ml-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
 
 volumes:
   mongodb_data:
