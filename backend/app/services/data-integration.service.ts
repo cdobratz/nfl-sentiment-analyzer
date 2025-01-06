@@ -211,9 +211,9 @@ export class DataIntegrationService {
 
   private calculateInfluence(tweet: Tweet): number {
     // Simple influence calculation based on engagement
-    const likes = tweet.public_metrics?.like_count || 0;
-    const retweets = tweet.public_metrics?.retweet_count || 0;
-    const replies = tweet.public_metrics?.reply_count || 0;
+    const likes = tweet.metrics?.like_count || 0;
+    const retweets = tweet.metrics?.retweet_count || 0;
+    const replies = tweet.metrics?.reply_count || 0;
     return likes + (retweets * 2) + (replies * 1.5);
   }
 }
