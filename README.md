@@ -73,7 +73,20 @@ nfl-sentiment-analyzer/
    npm run dev
    ```
 
-## API Rate Limits and Caching Strategy
+## NFL Sentiment Analysis ML Service
+
+This service provides sentiment analysis for NFL-related text using state-of-the-art transformer models. It's designed to be extensible, allowing for easy integration of new models for comparative analysis.
+
+### Architecture
+
+The service uses a model registry pattern that allows multiple sentiment analysis models to be registered and used. Currently, it includes:
+
+- **Model Registry**: The service stores and manages a collection of sentiment analysis models, each with its own configuration and performance metrics.
+- **API**: The service exposes an API for registering new models, retrieving model details, and triggering sentiment analysis tasks.
+
+#### See more in the [ML Service](./ml/README.md)
+
+### API Rate Limits and Caching Strategy
 
 This project is designed to work within the free tier limits of the Twitter API. Here's how we manage API usage:
 
