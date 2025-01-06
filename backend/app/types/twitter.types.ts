@@ -1,8 +1,8 @@
 export interface Tweet {
   text: string;
   author: string;
-  created_at?: string;
-  public_metrics?: {
+  timestamp: Date;
+  metrics?: {
     like_count: number;
     retweet_count: number;
     reply_count: number;
