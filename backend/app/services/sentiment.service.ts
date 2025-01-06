@@ -96,8 +96,11 @@ export class SentimentService {
 
     const sortedDates = Array.from(dateMap.keys()).sort();
     const sentiments = sortedDates.map(date => {
-      const { sum, count } = dateMap.get(date)!;
-      return sum / count;
+      const data = dateMap.get(date);
+      if (!data) {
+        throw new Error(`Missing sentiment data for date: ${date}`);
+      }
+      return data.sum / data.count;
     });
 
     return {

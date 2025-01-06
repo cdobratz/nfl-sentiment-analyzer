@@ -11,15 +11,16 @@ const cacheManager = new NodeCache({
  * Cache decorator for class methods
  * @param ttl Time to live in seconds
  */
-export function cache(ttl: number = 300) {
+export function cache(ttl = 300) {
   return function (
-    target: any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    target: object,
     propertyKey: string,
     descriptor: PropertyDescriptor
   ) {
     const originalMethod = descriptor.value;
 
-    descriptor.value = async function (...args: any[]) {
+    descriptor.value = async function (...args: unknown[]) {
       const key = `${propertyKey}-${JSON.stringify(args)}`;
       const cachedValue = cacheManager.get(key);
 

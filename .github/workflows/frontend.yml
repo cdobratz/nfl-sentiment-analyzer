@@ -68,6 +68,9 @@ jobs:
         npm run build
 
     - name: Deploy to S3
+      env:
+        AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
       run: |
-        aws s3 sync frontend/build/ s3://${{ secrets.AWS_S3_BUCKET }} --delete
-      if: ${{ secrets.AWS_S3_BUCKET != '' }}
+        aws s3 sync ./frontend/dist s3://${{ env.S3_BUCKET }} --delete
+      if: "${{ env.AWS_KEY != '' && env.S3_BUCKET != '' }}"

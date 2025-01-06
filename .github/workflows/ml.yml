@@ -82,15 +82,17 @@ jobs:
     - name: Train model
       env:
         WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
-      if: "${{ env.WANDB_API_KEY != '' }}"
+        HAS_WANDB: ${{ secrets.WANDB_API_KEY }}
       run: |
         cd ml
         python scripts/train_model.py
+      if: "${{ env.HAS_WANDB != '' }}"
 
     - name: Push model to Hugging Face
       env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      if: "${{ env.HF_TOKEN != '' }}"
+        HAS_HF: ${{ secrets.HF_TOKEN }}
       run: |
         cd ml
         python scripts/push_to_hub.py
+      if: "${{ env.HAS_HF != '' }}"

@@ -2,6 +2,7 @@ import axios from 'axios';
 import { Logger } from 'winston';
 import { injectable } from 'tsyringe';
 import { cache } from '../utils/cache';
+import { InjuryReport } from '../types/espn.types';
 
 interface ESPNGame {
   id: string;
@@ -116,9 +117,10 @@ export class ESPNService {
     }
   }
 
-  async getInjuryReport(teamId: string): Promise<any> {
+  @cache(60 * 60) // 1 hour cache
+  async getInjuryReport(teamId: string): Promise<InjuryReport> {
     try {
-      const response = await axios.get(
+      const response = await axios.get<InjuryReport>(
         `${this.BASE_URL}/teams/${teamId}/injuries`
       );
       return response.data;
@@ -130,8 +132,13 @@ export class ESPNService {
 
   private transformGameData(game: ESPNGame): GameDetails {
     const competition = game.competitions[0];
-    const homeTeam = competition.competitors.find(c => c.homeAway === 'home')!;
-    const awayTeam = competition.competitors.find(c => c.homeAway === 'away')!;
+    const homeTeam = competition.competitors.find(c => c.homeAway === 'home');
+    const awayTeam = competition.competitors.find(c => c.homeAway === 'away');
+    
+    if (!homeTeam || !awayTeam) {
+      throw new Error(`Invalid game data: missing team information for game ${game.id}`);
+    }
+    
     const odds = competition.odds?.[0];
 
     return {
@@ -158,7 +165,7 @@ export class ESPNService {
       season: {
         year: game.season.year,
         type: game.season.type === 2 ? 'regular' : 
-              game.season.type === 3 ? 'post' : 'pre',
+          game.season.type === 3 ? 'post' : 'pre',
       },
     };
   }

@@ -4,6 +4,7 @@ import { TwitterService } from './twitter.service';
 import { ESPNService } from './espn.service';
 import { SentimentService } from './sentiment.service';
 import { cache } from '../utils/cache';
+import { Tweet, SentimentResult, TopTweet, AnalystData } from '../types/twitter.types';
 
 interface GameAnalysis {
   gameId: string;
@@ -27,18 +28,9 @@ interface GameAnalysis {
     positive: number;
     negative: number;
     neutral: number;
-    topTweets: Array<{
-      text: string;
-      sentiment: number;
-      author: string;
-    }>;
+    topTweets: TopTweet[];
   };
-  analysts: Array<{
-    handle: string;
-    sentiment: number;
-    tweetCount: number;
-    influence: number;
-  }>;
+  analysts: AnalystData[];
   lastUpdated: string;
 }
 
@@ -98,6 +90,13 @@ export class DataIntegrationService {
         sentimentResults
       );
 
+      // Calculate sentiment counts
+      const sentimentCounts = {
+        positive: sentimentResults.filter(r => r.sentiment.label === 'positive').length,
+        negative: sentimentResults.filter(r => r.sentiment.label === 'negative').length,
+        neutral: sentimentResults.filter(r => r.sentiment.label === 'neutral').length
+      };
+
       return {
         gameId,
         gameDetails: {
@@ -114,9 +113,9 @@ export class DataIntegrationService {
         },
         tweets: {
           total: relevantTweets.length,
-          positive: sentimentResults.filter(r => r.sentiment === 'positive').length,
-          negative: sentimentResults.filter(r => r.sentiment === 'negative').length,
-          neutral: sentimentResults.filter(r => r.sentiment === 'neutral').length,
+          positive: sentimentCounts.positive,
+          negative: sentimentCounts.negative,
+          neutral: sentimentCounts.neutral,
           topTweets: this.getTopTweets(relevantTweets, sentimentResults)
         },
         analysts: analystSentiment,
@@ -129,10 +128,10 @@ export class DataIntegrationService {
   }
 
   private filterGameRelevantTweets(
-    tweets: any[],
+    tweets: Tweet[],
     homeTeam: string,
     awayTeam: string
-  ): any[] {
+  ): Tweet[] {
     const teamVariations = this.getTeamVariations(homeTeam, awayTeam);
     return tweets.filter(tweet => {
       const text = tweet.text.toLowerCase();
@@ -142,7 +141,7 @@ export class DataIntegrationService {
 
   private getTeamVariations(homeTeam: string, awayTeam: string): string[] {
     // Add common variations of team names (e.g., "Patriots" and "New England")
-    const variations = [];
+    const variations: string[] = [];
     [homeTeam, awayTeam].forEach(team => {
       variations.push(team);
       // Add team abbreviations and common nicknames
@@ -154,35 +153,35 @@ export class DataIntegrationService {
     return variations;
   }
 
-  private calculateOverallSentiment(results: any[]): number {
-    return results.reduce((acc, curr) => acc + curr.score, 0) / results.length;
+  private calculateOverallSentiment(results: SentimentResult[]): number {
+    return results.reduce((acc, curr) => acc + curr.sentiment.score, 0) / results.length;
   }
 
-  private calculateTeamSentiment(results: any[], teamName: string): number {
+  private calculateTeamSentiment(results: SentimentResult[], teamName: string): number {
     const teamTweets = results.filter(r => 
       r.text.toLowerCase().includes(teamName.toLowerCase())
     );
     return teamTweets.length > 0
-      ? teamTweets.reduce((acc, curr) => acc + curr.score, 0) / teamTweets.length
+      ? teamTweets.reduce((acc, curr) => acc + curr.sentiment.score, 0) / teamTweets.length
       : 0;
   }
 
-  private calculateConfidence(results: any[]): number {
-    return results.reduce((acc, curr) => acc + curr.confidence, 0) / results.length;
+  private calculateConfidence(results: SentimentResult[]): number {
+    return results.reduce((acc, curr) => acc + curr.sentiment.confidence, 0) / results.length;
   }
 
-  private getTopTweets(tweets: any[], sentimentResults: any[]): any[] {
+  private getTopTweets(tweets: Tweet[], sentimentResults: SentimentResult[]): TopTweet[] {
     return tweets
       .map((tweet, index) => ({
         text: tweet.text,
-        sentiment: sentimentResults[index].score,
+        sentiment: sentimentResults[index].sentiment.score,
         author: tweet.author
       }))
       .sort((a, b) => Math.abs(b.sentiment) - Math.abs(a.sentiment))
       .slice(0, 5);
   }
 
-  private processAnalystSentiment(tweets: any[], sentimentResults: any[]): any[] {
+  private processAnalystSentiment(tweets: Tweet[], sentimentResults: SentimentResult[]): AnalystData[] {
     const analystData = new Map();
 
     tweets.forEach((tweet, index) => {
@@ -196,7 +195,7 @@ export class DataIntegrationService {
       }
 
       const data = analystData.get(tweet.author);
-      data.sentimentSum += sentimentResults[index].score;
+      data.sentimentSum += sentimentResults[index].sentiment.score;
       data.tweetCount += 1;
     });
 
@@ -210,7 +209,7 @@ export class DataIntegrationService {
       .sort((a, b) => b.influence - a.influence);
   }
 
-  private calculateInfluence(tweet: any): number {
+  private calculateInfluence(tweet: Tweet): number {
     // Simple influence calculation based on engagement
     const likes = tweet.public_metrics?.like_count || 0;
     const retweets = tweet.public_metrics?.retweet_count || 0;

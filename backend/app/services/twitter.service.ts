@@ -7,7 +7,7 @@ export class TwitterService {
   private client: TwitterApi;
   private readonly DAILY_TWEET_LIMIT = 50;
   private readonly RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes in milliseconds
-  private requestCount: number = 0;
+  private requestCount = 0;
   private windowStart: number = Date.now();
 
   constructor(private logger: Logger) {
@@ -33,26 +33,33 @@ export class TwitterService {
 
         try {
           // Get user ID from username
-          const user = await this.client.v2.userByUsername(analyst);
-          if (!user.data) {
+          const userTweets = await this.client.v2.userByUsername(analyst);
+          if (!userTweets.data) {
             this.logger.error(`User not found: ${analyst}`);
             continue;
           }
 
           // Get recent tweets from the user
-          const userTweets = await this.client.v2.userTimeline(user.data.id, {
+          const userTimeline = await this.client.v2.userTimeline(userTweets.data.id, {
             max_results: 10,
-            'tweet.fields': ['created_at', 'text'],
+            'tweet.fields': ['created_at', 'text', 'public_metrics'],
             exclude: ['retweets', 'replies']
           });
 
-          for (const tweet of await userTweets.fetch()) {
+          // Process tweets
+          const timelineTweets = await userTimeline.fetchNext();
+          for (const tweet of timelineTweets) {
             if (this.requestCount >= this.DAILY_TWEET_LIMIT) break;
+
+            if (!tweet.created_at) {
+              this.logger.warn(`Tweet from ${analyst} missing creation date, skipping`);
+              continue;
+            }
 
             tweets.push({
               text: tweet.text,
               author: analyst,
-              timestamp: new Date(tweet.created_at!)
+              timestamp: new Date(tweet.created_at)
             });
 
             this.requestCount++;
