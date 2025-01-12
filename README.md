@@ -185,6 +185,7 @@ ESPN_API_KEY=your_espn_key
 Comprehensive documentation for the NFL Sentiment Analyzer project is available in the `/docs` directory:
 
 ### Quick Links
+- [MVP Deployment Guide](docs/wiki/mvp_deployment.md) - Essential steps for MVP deployment
 - [Quick Start Guide](docs/wiki/quick_start.md) - Get up and running quickly
 - [Technical Stack](docs/architecture/tech_stack.md) - Detailed overview of our technology choices
 - [Project Requirements](docs/requirements/project_requirements.md) - Project scope and requirements
