@@ -1,41 +1,56 @@
-import { TwitterService } from '../services/twitter.service';
 import { Logger } from 'winston';
+import { TwitterService } from '../services/twitter.service';
+import { Tweet } from '../types/twitter.types';
 
-// Example usage of TwitterService
-async function example() {
-  // Create a logger (you should use your actual logger configuration)
+async function main() {
   const logger = {
-    info: console.log,
-    error: console.error,
-    warn: console.warn
+    info: (...args: any[]) => console.log(...args),
+    error: (...args: any[]) => console.error(...args),
+    warn: (...args: any[]) => console.warn(...args)
   } as Logger;
 
-  // Initialize the service
   const twitterService = new TwitterService(logger);
 
   try {
-    // Get tweets from NFL analysts
-    const analysts = [
-      'AdamSchefter',    // ESPN
-      'RapSheet',        // NFL Network
-      'TomPelissero',    // NFL Network
-      'JosinaAnderson'   // NFL Insider
-    ];
+    console.log('Fetching game-related tweets...');
+    const gameId = '401547665'; // Example game ID
+    const teams = {
+      home: 'Chiefs',
+      away: 'Raiders'
+    };
 
-    const tweets = await twitterService.collectDailyTweets(analysts);
-    
-    // Process the tweets
-    tweets.forEach(tweet => {
-      console.log(`
-        Author: ${tweet.author}
-        Tweet: ${tweet.text}
-        Posted at: ${tweet.timestamp}
-      `);
+    const tweets = await twitterService.getGameRelatedTweets(gameId, teams);
+    console.log(`Found ${tweets.length} tweets`);
+
+    tweets.forEach((tweet: Tweet) => {
+      console.log('\n---');
+      console.log(`Tweet ID: ${tweet.id}`);
+      console.log(`Text: ${tweet.text}`);
+      console.log(`Author: ${tweet.authorId}`);
+      console.log(`Created: ${tweet.createdAt}`);
+      console.log('Metrics:', tweet.metrics);
     });
+
+    console.log('\nFetching analyst opinions...');
+    const analystTweets = await twitterService.getAnalystOpinions(gameId);
+    console.log(`Found ${analystTweets.length} analyst tweets`);
+
+    analystTweets.forEach((tweet: Tweet) => {
+      console.log('\n---');
+      console.log(`Tweet ID: ${tweet.id}`);
+      console.log(`Text: ${tweet.text}`);
+      console.log(`Author: ${tweet.authorId}`);
+      console.log(`Created: ${tweet.createdAt}`);
+      console.log('Metrics:', tweet.metrics);
+    });
+
   } catch (error) {
-    console.error('Error fetching tweets:', error);
+    if (error instanceof Error) {
+      console.error('Error:', error.message);
+    } else {
+      console.error('Unknown error occurred');
+    }
   }
 }
 
-// Run the example
-example();
+main();

@@ -6,8 +6,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-# Copy application code
-COPY . .
+# Copy source files
+COPY tsconfig.json .
+COPY app ./app
 
 # Build the application
 RUN npm run build

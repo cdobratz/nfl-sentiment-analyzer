@@ -1,89 +1,63 @@
-import { injectable } from 'tsyringe';
+import { injectable, inject } from 'tsyringe';
 import { Logger } from 'winston';
 import { ESPNService } from '../services/espn.service';
 import { TwitterService } from '../services/twitter.service';
-import { FileUploadService } from '../services/file-upload.service';
-import { GameData } from '../types/game.types';
+import { DataIntegrationService } from '../services/data-integration.service';
+import { ESPNGame } from '../types/espn.types';
+import { TopTweet } from '../types/twitter.types';
 
 @injectable()
 export class DataCollectionController {
   constructor(
-    private logger: Logger,
+    @inject('Logger') private logger: Logger,
     private espnService: ESPNService,
     private twitterService: TwitterService,
-    private fileUploadService: FileUploadService
+    private dataIntegrationService: DataIntegrationService
   ) {}
 
-  async collectGameData(gameId: string): Promise<GameData> {
+  async collectGameData(gameId: string): Promise<{
+    game: ESPNGame;
+    topTweets: TopTweet[];
+    analystOpinions: TopTweet[];
+  }> {
     try {
-      // Get game details from ESPN
-      const gameDetails = await this.espnService.getGameDetails(gameId);
+      const result = await this.dataIntegrationService.getGameAnalysis(gameId);
       
-      // Get team statistics
-      const [homeTeamStats, awayTeamStats] = await Promise.all([
-        this.espnService.getTeamStats(gameDetails.homeTeam.id),
-        this.espnService.getTeamStats(gameDetails.awayTeam.id)
-      ]);
+      this.logger.info('Game data collection completed:', {
+        gameId,
+        topTweetsCount: result.topTweets.length,
+        analystOpinionsCount: result.analystOpinions.length
+      });
 
-      // Get game odds
-      const odds = await this.espnService.getGameOdds(gameId);
-
-      // Get social media sentiment
-      const [gameTweets, analystOpinions] = await Promise.all([
-        this.twitterService.getGameRelatedTweets(gameId, {
-          home: gameDetails.homeTeam.name,
-          away: gameDetails.awayTeam.name
-        }),
-        this.twitterService.getAnalystOpinions(gameId)
-      ]);
-
-      return {
-        gameDetails,
-        teamStats: {
-          home: homeTeamStats,
-          away: awayTeamStats
-        },
-        odds,
-        socialData: {
-          tweets: gameTweets,
-          analystOpinions
-        }
-      };
+      return result;
     } catch (error) {
-      this.logger.error('Error collecting game data:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error('Error collecting game data:', {
+        gameId,
+        error: errorMessage
+      });
       throw error;
     }
   }
 
-  async processUploadedFile(file: Express.Multer.File): Promise<GameData[]> {
+  async refreshGameData(gameId: string): Promise<void> {
     try {
-      const fileExtension = file.originalname.split('.').pop()?.toLowerCase();
-      
-      if (fileExtension === 'xlsx') {
-        return await this.fileUploadService.processExcelFile(file.buffer);
-      } else if (fileExtension === 'json') {
-        return await this.fileUploadService.processJsonFile(file.buffer);
-      } else {
-        throw new Error('Unsupported file format. Please upload .xlsx or .json files only.');
-      }
-    } catch (error) {
-      this.logger.error('Error processing uploaded file:', error);
-      throw error;
-    }
-  }
+      const game = await this.espnService.getGameDetails(gameId);
+      await Promise.all([
+        this.espnService.refreshGameDetails(gameId),
+        this.twitterService.refreshGameTweets(gameId, {
+          home: game.homeTeam.abbreviation,
+          away: game.awayTeam.abbreviation
+        })
+      ]);
 
-  async collectHistoricalData(startDate: string, endDate: string): Promise<GameData[]> {
-    try {
-      const games = await this.espnService.getHistoricalGames(startDate, endDate);
-      
-      // Collect detailed data for each game
-      const gameData = await Promise.all(
-        games.map(game => this.collectGameData(game.gameId))
-      );
-
-      return gameData;
+      this.logger.info('Game data refresh completed:', { gameId });
     } catch (error) {
-      this.logger.error('Error collecting historical data:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error('Error refreshing game data:', {
+        gameId,
+        error: errorMessage
+      });
       throw error;
     }
   }

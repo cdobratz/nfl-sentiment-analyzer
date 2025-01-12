@@ -1,129 +1,65 @@
 import { injectable } from 'tsyringe';
 import { Logger } from 'winston';
-import axios from 'axios';
 import NodeCache from 'node-cache';
 import { SentimentResult } from '../types/twitter.types';
 
-interface ModelInfo {
-  description: string;
-}
+const POSITIVE_WORDS = ['good', 'great', 'excellent', 'awesome', 'amazing'];
+const NEGATIVE_WORDS = ['bad', 'terrible', 'awful', 'poor', 'horrible'];
 
 @injectable()
 export class SentimentService {
-  private readonly API_URL = process.env.ML_API_URL || 'http://localhost:8000';
-  private readonly CACHE_TTL = 60 * 60; // 1 hour
-  private readonly MAX_RETRIES = 3;
-  private readonly INITIAL_RETRY_DELAY = 1000;
-  private cache: NodeCache;
-  private currentModel: string = 'bertweet-base';
+  private readonly cache: NodeCache;
 
-  constructor(private logger: Logger) {
-    this.cache = new NodeCache({ stdTTL: this.CACHE_TTL });
-  }
-
-  private async retryWithBackoff<T>(
-    operation: () => Promise<T>,
-    retryCount = 0
-  ): Promise<T> {
-    try {
-      return await operation();
-    } catch (error) {
-      if (retryCount < this.MAX_RETRIES) {
-        const delay = this.INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
-        this.logger.warn(`Request failed, retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return this.retryWithBackoff(operation, retryCount + 1);
-      }
-      throw error;
-    }
-  }
-
-  async listAvailableModels(): Promise<Record<string, ModelInfo>> {
-    try {
-      const response = await axios.get(`${this.API_URL}/models`);
-      return response.data;
-    } catch (error) {
-      this.logger.error('Error fetching available models:', error);
-      throw new Error('Failed to fetch available models');
-    }
-  }
-
-  async setModel(modelName: string): Promise<void> {
-    const models = await this.listAvailableModels();
-    if (!models[modelName]) {
-      throw new Error(`Model ${modelName} not found`);
-    }
-    this.currentModel = modelName;
-    this.logger.info(`Switched to model: ${modelName}`);
-  }
-
-  private getCacheKey(text: string): string {
-    return `sentiment_${this.currentModel}_${text}`;
+  constructor(private readonly logger: Logger) {
+    this.cache = new NodeCache({ stdTTL: 300 }); // Cache for 5 minutes
   }
 
   async analyzeTweets(tweets: string[]): Promise<SentimentResult[]> {
-    const results: SentimentResult[] = [];
-    const uncachedTweets: string[] = [];
-    const tweetMap = new Map<string, number>();
+    return tweets.map(text => this.analyzeSentiment(text));
+  }
 
-    // Check cache first
-    tweets.forEach((tweet, index) => {
-      const cacheKey = this.getCacheKey(tweet);
-      const cachedResult = this.cache.get<SentimentResult>(cacheKey);
-      
-      if (cachedResult) {
-        results[index] = cachedResult;
-      } else {
-        uncachedTweets.push(tweet);
-        tweetMap.set(tweet, index);
-      }
+  analyzeSentiment(text: string): SentimentResult {
+    const cacheKey = `sentiment:${text}`;
+    const cached = this.cache.get<SentimentResult>(cacheKey);
+    if (cached) return cached;
+
+    const words = text.toLowerCase().split(/\s+/);
+    let score = 0;
+    let confidence = 0;
+
+    // Count positive and negative words
+    words.forEach(word => {
+      if (POSITIVE_WORDS.includes(word)) score += 1;
+      if (NEGATIVE_WORDS.includes(word)) score -= 1;
     });
 
-    if (uncachedTweets.length > 0) {
-      try {
-        const response = await this.retryWithBackoff(() => 
-          axios.post(`${this.API_URL}/analyze`, {
-            texts: uncachedTweets,
-            model_name: this.currentModel
-          })
-        );
+    // Normalize score to [-1, 1] range
+    const maxPossibleScore = words.length;
+    score = maxPossibleScore > 0 ? score / maxPossibleScore : 0;
+    
+    // Calculate confidence based on word matches
+    const matchedWords = words.filter(word => 
+      POSITIVE_WORDS.includes(word) || NEGATIVE_WORDS.includes(word)
+    ).length;
+    confidence = matchedWords / words.length;
 
-        response.data.forEach((analysis: any) => {
-          const index = tweetMap.get(analysis.text);
-          if (index === undefined) return;
+    // Determine label
+    let label: 'positive' | 'negative' | 'neutral';
+    if (score > 0.3) label = 'positive';
+    else if (score < -0.3) label = 'negative';
+    else label = 'neutral';
 
-          const result: SentimentResult = {
-            text: analysis.text,
-            sentiment: {
-              score: analysis.sentiment.score,
-              label: analysis.label as 'positive' | 'negative' | 'neutral',
-              confidence: analysis.confidence
-            }
-          };
-
-          results[index] = result;
-          this.cache.set(this.getCacheKey(analysis.text), result);
-        });
-      } catch (error) {
-        this.logger.error('Error analyzing tweets:', error);
-        // Fill in neutral results for failed analyses
-        uncachedTweets.forEach(tweet => {
-          const index = tweetMap.get(tweet);
-          if (index === undefined) return;
-
-          results[index] = {
-            text: tweet,
-            sentiment: {
-              score: 0,
-              label: 'neutral',
-              confidence: 0
-            }
-          };
-        });
+    const result: SentimentResult = {
+      text,
+      sentiment: {
+        score,
+        confidence,
+        label
       }
-    }
+    };
 
-    return results;
+    this.cache.set(cacheKey, result);
+    return result;
   }
 
   clearCache(): void {

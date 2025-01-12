@@ -1,297 +1,210 @@
 import { injectable } from 'tsyringe';
 import { Logger } from 'winston';
-import { TwitterApi } from 'twitter-api-v2';
+import { TwitterApi, TweetV2, TweetPublicMetricsV2, TwitterApiv2 } from 'twitter-api-v2';
 import NodeCache from 'node-cache';
-import { Tweet } from '../types/twitter.types';
+import { Tweet, TopTweet } from '../types/twitter.types';
+
+interface TwitterServiceConfig {
+  cacheTTL?: number;
+  maxTweetsPerRequest?: number;
+  retryAttempts?: number;
+  retryDelayMs?: number;
+}
+
+interface AnalystInfo {
+  handle: string;
+  name: string;
+  organization: string;
+  verified: boolean;
+}
+
+interface CustomMetrics {
+  retweets: number;
+  replies: number;
+  likes: number;
+  quotes: number;
+}
+
+const NFL_ANALYSTS: Record<string, AnalystInfo> = {
+  'AdamSchefter': {
+    handle: 'AdamSchefter',
+    name: 'Adam Schefter',
+    organization: 'ESPN',
+    verified: true
+  },
+  'RapSheet': {
+    handle: 'RapSheet',
+    name: 'Ian Rapoport',
+    organization: 'NFL Network',
+    verified: true
+  },
+  'mortreport': {
+    handle: 'mortreport',
+    name: 'Chris Mortensen',
+    organization: 'ESPN',
+    verified: true
+  },
+  'TomPelissero': {
+    handle: 'TomPelissero',
+    name: 'Tom Pelissero',
+    organization: 'NFL Network',
+    verified: true
+  }
+};
 
 @injectable()
 export class TwitterService {
-  private client: TwitterApi;
-  private cache: NodeCache;
-  private requestQueue: Array<() => Promise<any>> = [];
-  private isProcessingQueue = false;
-  
-  // Cache configuration
-  private readonly CACHE_TTL = 60 * 60; // 1 hour cache
-  private readonly CACHE_CHECK_PERIOD = 120; // Check for expired entries every 2 minutes
-  private readonly CACHE_ERROR_TTL = 30 * 60; // Cache errors for 30 minutes
-  
-  // Rate limiting configuration
+  private readonly twitterClient: TwitterApi;
+  private readonly cache: NodeCache;
   private readonly MAX_RETRIES = 3;
-  private readonly INITIAL_RETRY_DELAY = 1000; // 1 second
-  private readonly DAILY_TWEET_LIMIT = 50;
-  private requestCount = 0;
+  private readonly INITIAL_RETRY_DELAY = 1000;
 
-  private readonly NFL_HASHTAGS = [
-    'NFL', 'NFLTwitter', 'NFLUpdates', 'GameDay', 'NFLGameDay',
-    'FantasyFootball', 'NFLStats', 'NFLHighlights'
-  ];
+  constructor(
+    private readonly logger: Logger,
+    config?: {
+      bearerToken?: string;
+      apiKey?: string;
+      apiSecret?: string;
+    }
+  ) {
+    const bearerToken = config?.bearerToken || process.env.TWITTER_BEARER_TOKEN;
+    const apiKey = config?.apiKey || process.env.TWITTER_API_KEY;
+    const apiSecret = config?.apiSecret || process.env.TWITTER_API_SECRET;
 
-  private readonly NFL_ACCOUNTS = [
-    'AdamSchefter', 'RapSheet', 'TomPelissero', 'NFLNetwork',
-    'ProFootballTalk', 'NFL', 'ESPNNFL', 'NFLonCBS', 'NFLonFOX'
-  ];
-
-  constructor(private logger: Logger) {
-    const bearerToken = process.env.TWITTER_BEARER_TOKEN;
-    if (!bearerToken) {
-      throw new Error('Twitter bearer token is not configured');
+    if (!bearerToken && (!apiKey || !apiSecret)) {
+      throw new Error('Twitter credentials not provided');
     }
 
-    this.client = new TwitterApi(bearerToken);
-    
-    // Initialize cache with checkperiod and error handling
-    this.cache = new NodeCache({ 
-      stdTTL: this.CACHE_TTL,
-      checkperiod: this.CACHE_CHECK_PERIOD,
-      errorOnMissing: false,
-      useClones: false
-    });
+    this.twitterClient = bearerToken
+      ? new TwitterApi(bearerToken)
+      : new TwitterApi({ appKey: apiKey!, appSecret: apiSecret! });
 
-    // Log cache events for monitoring
-    this.cache.on('set', (key) => {
-      this.logger.debug(`Cache set: ${key}`);
-    });
-
-    this.cache.on('expired', (key) => {
-      this.logger.debug(`Cache expired: ${key}`);
-    });
-
-    this.cache.on('flush', () => {
-      this.logger.debug('Cache flushed');
-    });
+    this.cache = new NodeCache({ stdTTL: 300 }); // Cache for 5 minutes
   }
 
-  private async sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  private handleError(error: unknown, context: string): never {
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'Unknown error';
+
+    this.logger.error(`Twitter API Error: ${context}`, {
+      error: errorMessage
+    });
+    throw new Error(`Twitter API Error: ${errorMessage}`);
   }
 
-  private async retryWithBackoff<T>(
-    operation: () => Promise<T>,
-    retryCount = 0
-  ): Promise<T> {
+  private mapTwitterMetricsToCustomFormat(metrics: TweetPublicMetricsV2 | undefined | null): CustomMetrics {
+    if (!metrics) {
+      return {
+        retweets: 0,
+        replies: 0,
+        likes: 0,
+        quotes: 0
+      };
+    }
+
+    return {
+      retweets: metrics.retweet_count || 0,
+      replies: metrics.reply_count || 0,
+      likes: metrics.like_count || 0,
+      quotes: metrics.quote_count || 0
+    };
+  }
+
+  private async searchTweets(query: string): Promise<TweetV2[]> {
     try {
-      return await operation();
-    } catch (error) {
-      if (error.code === 429 && retryCount < this.MAX_RETRIES) {
-        const delay = this.INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
-        const resetTime = error.rateLimit?.reset 
-          ? new Date(error.rateLimit.reset * 1000).toLocaleString()
-          : 'unknown';
-        
-        this.logger.warn(
-          `Rate limited. Retrying in ${delay}ms... Rate limit resets at ${resetTime}. ` +
-          `Remaining daily limit: ${error.rateLimit?.day?.remaining || 'unknown'}`
-        );
-        
-        await this.sleep(delay);
-        return this.retryWithBackoff(operation, retryCount + 1);
-      }
-      throw error;
-    }
-  }
-
-  private async addToQueue<T>(operation: () => Promise<T>): Promise<T> {
-    return new Promise((resolve, reject) => {
-      this.requestQueue.push(async () => {
-        try {
-          const result = await this.retryWithBackoff(operation);
-          resolve(result);
-        } catch (error) {
-          reject(error);
-        }
-      });
-
-      if (!this.isProcessingQueue) {
-        this.processQueue();
-      }
-    });
-  }
-
-  private async processQueue(): Promise<void> {
-    if (this.isProcessingQueue || this.requestQueue.length === 0) {
-      return;
-    }
-
-    this.isProcessingQueue = true;
-
-    while (this.requestQueue.length > 0) {
-      const request = this.requestQueue.shift();
-      if (request) {
-        try {
-          await request();
-          // Add a small delay between requests to avoid rate limits
-          await this.sleep(1100); // Twitter's rate limit is 1 request/second
-        } catch (error) {
-          this.logger.error('Error processing request:', error);
-        }
-      }
-    }
-
-    this.isProcessingQueue = false;
-  }
-
-  private getCacheKey(username: string): string {
-    return `twitter_user_${username.toLowerCase()}`;
-  }
-
-  private getErrorCacheKey(username: string): string {
-    return `twitter_error_${username.toLowerCase()}`;
-  }
-
-  async collectDailyTweets(analysts: string[]): Promise<Tweet[]> {
-    const allTweets: Tweet[] = [];
-    this.requestCount = 0;
-
-    for (const analyst of analysts) {
-      try {
-        const cacheKey = this.getCacheKey(analyst);
-        const errorCacheKey = this.getErrorCacheKey(analyst);
-        
-        // Check if we have a cached error for this analyst
-        const cachedError = this.cache.get(errorCacheKey);
-        if (cachedError) {
-          this.logger.warn(`Skipping ${analyst} due to recent error: ${cachedError}`);
-          continue;
-        }
-
-        // Check for cached tweets
-        const cachedTweets = this.cache.get<Tweet[]>(cacheKey);
-        if (cachedTweets) {
-          this.logger.info(`Using cached tweets for ${analyst} (${cachedTweets.length} tweets)`);
-          allTweets.push(...cachedTweets);
-          continue;
-        }
-
-        const tweets = await this.addToQueue(async () => {
-          const userResponse = await this.client.v2.userByUsername(analyst);
-          if (!userResponse.data) {
-            throw new Error(`User not found: ${analyst}`);
-          }
-
-          const userTimeline = await this.client.v2.userTimeline(userResponse.data.id, {
-            max_results: 10,
-            'tweet.fields': ['created_at', 'text', 'public_metrics'],
-            exclude: ['retweets', 'replies']
-          });
-
-          const timelineTweets = await userTimeline.fetchNext();
-          const tweets: Tweet[] = [];
-          
-          for (const tweet of timelineTweets) {
-            tweets.push({
-              text: tweet.text,
-              author: analyst,
-              timestamp: new Date(tweet.created_at || Date.now()),
-              metrics: tweet.public_metrics || {
-                like_count: 0,
-                retweet_count: 0,
-                reply_count: 0
-              }
-            });
-          }
-          
-          return tweets;
-        });
-
-        if (tweets.length > 0) {
-          this.logger.info(`Caching ${tweets.length} tweets for ${analyst}`);
-          this.cache.set(cacheKey, tweets);
-          allTweets.push(...tweets);
-        } else {
-          this.logger.warn(`No tweets found for ${analyst}`);
-        }
-
-        this.requestCount += tweets.length;
-        if (this.requestCount >= this.DAILY_TWEET_LIMIT) {
-          this.logger.warn('Daily tweet limit reached');
-          break;
-        }
-      } catch (error) {
-        this.logger.error(`Error fetching tweets for ${analyst}:`, error);
-        
-        // Cache the error to prevent repeated failed requests
-        const errorCacheKey = this.getErrorCacheKey(analyst);
-        this.cache.set(errorCacheKey, error.message, this.CACHE_ERROR_TTL);
-        
-        // Continue with next analyst
-        continue;
-      }
-    }
-
-    return allTweets;
-  }
-
-  async getGameRelatedTweets(gameId: string, teams: { home: string, away: string }): Promise<Tweet[]> {
-    const cacheKey = `game_tweets_${gameId}`;
-    const cachedTweets = this.cache.get<Tweet[]>(cacheKey);
-    
-    if (cachedTweets) {
-      return cachedTweets;
-    }
-
-    try {
-      const searchQuery = `(${teams.home} OR ${teams.away}) (${this.NFL_HASHTAGS.join(' OR ')}) -is:retweet lang:en`;
-      const tweets = await this.client.v2.search({
-        query: searchQuery,
-        'tweet.fields': ['created_at', 'public_metrics', 'entities'],
+      const response = await this.twitterClient.v2.search(query, {
+        'tweet.fields': ['author_id', 'created_at', 'public_metrics'],
         'user.fields': ['username', 'verified'],
         max_results: 100
       });
 
-      const processedTweets = tweets.data.map(tweet => ({
-        id: tweet.id,
-        text: tweet.text,
-        created_at: tweet.created_at,
-        metrics: tweet.public_metrics,
-        author: tweet.author_id
-      }));
+      if (!response || !response.data) {
+        return [];
+      }
 
-      this.cache.set(cacheKey, processedTweets);
-      return processedTweets;
+      const tweets = response.data;
+      return Array.isArray(tweets) ? tweets : [tweets];
     } catch (error) {
-      this.logger.error(`Error fetching game tweets for ${gameId}:`, error);
-      throw error;
+      this.logger.error('Error searching tweets:', error);
+      return [];
+    }
+  }
+
+  async getGameRelatedTweets(gameId: string, teams: { home: string; away: string }): Promise<Tweet[]> {
+    const cacheKey = `game_tweets:${gameId}`;
+    const cached = this.cache.get<Tweet[]>(cacheKey);
+    if (cached) return cached;
+
+    try {
+      const query = `(${teams.home} OR ${teams.away}) lang:en -is:retweet`;
+      const tweets = await this.searchTweets(query);
+      
+      if (!tweets.length) {
+        return [];
+      }
+
+      const transformedTweets = tweets.map(tweet => 
+        this.convertTweetToInternalFormat(tweet)
+      );
+
+      this.cache.set(cacheKey, transformedTweets);
+      return transformedTweets;
+    } catch (error) {
+      return this.handleError(error, `Failed to fetch game tweets for game ${gameId}`);
     }
   }
 
   async getAnalystOpinions(gameId: string): Promise<Tweet[]> {
-    const cacheKey = `analyst_tweets_${gameId}`;
-    const cachedTweets = this.cache.get<Tweet[]>(cacheKey);
-    
-    if (cachedTweets) {
-      return cachedTweets;
-    }
+    const cacheKey = `analyst_tweets:${gameId}`;
+    const cached = this.cache.get<Tweet[]>(cacheKey);
+    if (cached) return cached;
 
     try {
-      const searchQuery = `from:${this.NFL_ACCOUNTS.join(' OR from:')} -is:retweet`;
-      const tweets = await this.client.v2.search({
-        query: searchQuery,
-        'tweet.fields': ['created_at', 'public_metrics', 'entities'],
-        'user.fields': ['username', 'verified'],
-        max_results: 50
-      });
+      const query = `game ${gameId} (from:AdamSchefter OR from:RapSheet)`;
+      const tweets = await this.searchTweets(query);
+      
+      if (!tweets.length) {
+        return [];
+      }
 
-      const processedTweets = tweets.data.map(tweet => ({
-        id: tweet.id,
-        text: tweet.text,
-        created_at: tweet.created_at,
-        metrics: tweet.public_metrics,
-        author: tweet.author_id,
+      const transformedTweets = tweets.map(tweet => ({
+        ...this.convertTweetToInternalFormat(tweet),
         isAnalyst: true
       }));
 
-      this.cache.set(cacheKey, processedTweets);
-      return processedTweets;
+      this.cache.set(cacheKey, transformedTweets);
+      return transformedTweets;
     } catch (error) {
-      this.logger.error('Error fetching analyst opinions:', error);
-      throw error;
+      return this.handleError(error, `Failed to fetch analyst tweets for game ${gameId}`);
     }
   }
 
-  // Utility method to clear cache if needed
+  private convertTweetToInternalFormat(tweet: TweetV2): Tweet {
+    return {
+      id: tweet.id,
+      text: tweet.text,
+      authorId: tweet.author_id || '',
+      createdAt: tweet.created_at ? new Date(tweet.created_at) : new Date(),
+      metrics: this.mapTwitterMetricsToCustomFormat(tweet.public_metrics),
+      isAnalyst: false
+    };
+  }
+
+  async refreshGameTweets(gameId: string, teams: { home: string; away: string }): Promise<void> {
+    const cacheKey = `game_tweets:${gameId}`;
+    this.cache.del(cacheKey);
+    await this.getGameRelatedTweets(gameId, teams);
+  }
+
+  async refreshAnalystTweets(gameId: string): Promise<void> {
+    const cacheKey = `analyst_tweets:${gameId}`;
+    this.cache.del(cacheKey);
+    await this.getAnalystOpinions(gameId);
+  }
+
   clearCache(): void {
     this.cache.flushAll();
-    this.logger.info('Cache cleared');
+    this.logger.info('Twitter cache cleared');
   }
 }

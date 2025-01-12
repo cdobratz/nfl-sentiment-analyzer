@@ -1,26 +1,30 @@
+import { Tweet } from './twitter.types';
+
+export interface TeamData {
+  id: string;
+  name: string;
+  score: string;
+  stats: any;
+}
+
 export interface GameData {
-  gameId: string;
-  homeTeam: {
-    id: string;
-    name: string;
-    abbreviation: string;
-    score?: number;
-  };
-  awayTeam: {
-    id: string;
-    name: string;
-    abbreviation: string;
-    score?: number;
-  };
+  id: string;
+  season: number;
+  seasonType: string;
   date: string;
-  status: string;
-  odds?: {
-    spread?: string;
-    overUnder?: number;
+  homeTeam: TeamData;
+  awayTeam: TeamData;
+  odds: {
+    details: string;
+    overUnder: number;
+    spread: number;
   };
-  week: number;
-  season: {
-    year: number;
-    type: string;
+  tweets: Tweet[];
+  analystOpinions: Tweet[];
+  gameDetails: {
+    venue?: string;
+    attendance?: number;
+    weather?: string;
+    officials?: string[];
   };
 }

@@ -1,47 +1,36 @@
-export interface SentimentResponse {
-  label: string;
-  sentiment: {
-    score: number;
-    confidence: number;
-  };
-}
+import { injectable } from 'tsyringe';
+import axios from 'axios';
+import { Logger } from 'winston';
 
-export interface ISentimentAnalyzer {
-  analyze(text: string): Promise<SentimentResponse>;
-}
+@injectable()
+export class SentimentAnalyzer {
+  private readonly ML_API_URL: string;
+  private readonly logger: Logger;
 
-export class SentimentAnalyzer implements ISentimentAnalyzer {
-  private mlServiceUrl: string;
-
-  constructor() {
-    this.mlServiceUrl = process.env.ML_API_URL || 'http://localhost:8000';
+  constructor(logger: Logger) {
+    this.logger = logger;
+    this.ML_API_URL = process.env.ML_API_URL || 'http://ml-service:5000';
   }
 
-  async analyze(text: string): Promise<SentimentResponse> {
+  async analyze(text: string): Promise<number> {
     try {
-      const response = await fetch(`${this.mlServiceUrl}/analyze`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ text }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`ML service returned status: ${response.status}`);
-      }
-
-      return await response.json();
+      const response = await axios.post(`${this.ML_API_URL}/analyze`, { text });
+      return response.data.sentiment;
     } catch (error) {
-      console.error('Error calling ML service:', error);
-      // Return neutral sentiment as fallback
-      return {
-        label: 'neutral',
-        sentiment: {
-          score: 0,
-          confidence: 0.5
-        }
-      };
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error('Error analyzing sentiment:', errorMessage);
+      throw error;
+    }
+  }
+
+  async analyzeBatch(texts: string[]): Promise<number[]> {
+    try {
+      const response = await axios.post(`${this.ML_API_URL}/analyze-batch`, { texts });
+      return response.data.sentiments;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error('Error analyzing batch sentiment:', errorMessage);
+      throw error;
     }
   }
 }

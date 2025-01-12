@@ -1,35 +1,37 @@
 import NodeCache from 'node-cache';
 
 // Initialize cache with default TTL of 5 minutes
-const cacheManager = new NodeCache({
-  stdTTL: 300,
-  checkperiod: 60,
+export const cache = new NodeCache({
+  stdTTL: 300, // 5 minutes
+  checkperiod: 60, // Check for expired keys every minute
   useClones: false
 });
+
+export function cacheKey(...args: (string | number)[]): string {
+  return args.join(':');
+}
 
 /**
  * Cache decorator for class methods
  * @param ttl Time to live in seconds
  */
-export function cache(ttl = 300) {
+export function cacheDecorator(ttl = 300) {
   return function (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    target: object,
+    _target: object,
     propertyKey: string,
     descriptor: PropertyDescriptor
   ) {
     const originalMethod = descriptor.value;
-
-    descriptor.value = async function (...args: unknown[]) {
-      const key = `${propertyKey}-${JSON.stringify(args)}`;
-      const cachedValue = cacheManager.get(key);
+    descriptor.value = async function (...args: any[]) {
+      const key = cacheKey(propertyKey, ...args.map(arg => String(arg)));
+      const cachedValue = cache.get(key);
 
       if (cachedValue !== undefined) {
         return cachedValue;
       }
 
       const result = await originalMethod.apply(this, args);
-      cacheManager.set(key, result, ttl);
+      cache.set(key, result, ttl);
       return result;
     };
 
@@ -37,26 +39,23 @@ export function cache(ttl = 300) {
   };
 }
 
-/**
- * Clear cache for a specific key pattern
- * @param pattern Key pattern to match
- */
+// Clear cache for a specific key pattern
 export function clearCache(pattern: string): void {
-  const keys = cacheManager.keys();
+  const keys = cache.keys();
   const matchingKeys = keys.filter(key => key.includes(pattern));
-  cacheManager.del(matchingKeys);
+  matchingKeys.forEach(key => cache.del(key));
 }
 
-/**
- * Get cache statistics
- */
-export function getCacheStats() {
-  return cacheManager.getStats();
+// Get cache statistics
+export function getCacheStats(): { keys: number; hits: number; misses: number } {
+  return {
+    keys: cache.keys().length,
+    hits: cache.getStats().hits,
+    misses: cache.getStats().misses
+  };
 }
 
-/**
- * Clear entire cache
- */
+// Clear entire cache
 export function clearAllCache(): void {
-  cacheManager.flushAll();
+  cache.flushAll();
 }
