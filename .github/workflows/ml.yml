@@ -1,0 +1,98 @@
+name: ML Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ml/**'
+      - '.github/workflows/ml.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'ml/**'
+      - '.github/workflows/ml.yml'
+  schedule:
+    - cron: '0 0 * * 0'  # Run weekly on Sunday at midnight
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ml
+
+    strategy:
+      matrix:
+        python-version: [3.9]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+
+    - name: Run tests
+      run: |
+        pytest --cov=models --cov-report=xml
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./ml/coverage.xml
+        flags: ml
+        name: ml-python
+
+  train:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        cd ml
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+
+    - name: Train model
+      env:
+        WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+        HAS_WANDB: ${{ secrets.WANDB_API_KEY }}
+      run: |
+        cd ml
+        python scripts/train_model.py
+      if: "${{ env.HAS_WANDB != '' }}"
+
+    - name: Push model to Hugging Face
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        HAS_HF: ${{ secrets.HF_TOKEN }}
+      run: |
+        cd ml
+        python scripts/push_to_hub.py
+      if: "${{ env.HAS_HF != '' }}"
