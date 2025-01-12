@@ -22,6 +22,16 @@ export class TwitterService {
   private readonly DAILY_TWEET_LIMIT = 50;
   private requestCount = 0;
 
+  private readonly NFL_HASHTAGS = [
+    'NFL', 'NFLTwitter', 'NFLUpdates', 'GameDay', 'NFLGameDay',
+    'FantasyFootball', 'NFLStats', 'NFLHighlights'
+  ];
+
+  private readonly NFL_ACCOUNTS = [
+    'AdamSchefter', 'RapSheet', 'TomPelissero', 'NFLNetwork',
+    'ProFootballTalk', 'NFL', 'ESPNNFL', 'NFLonCBS', 'NFLonFOX'
+  ];
+
   constructor(private logger: Logger) {
     const bearerToken = process.env.TWITTER_BEARER_TOKEN;
     if (!bearerToken) {
@@ -210,6 +220,73 @@ export class TwitterService {
     }
 
     return allTweets;
+  }
+
+  async getGameRelatedTweets(gameId: string, teams: { home: string, away: string }): Promise<Tweet[]> {
+    const cacheKey = `game_tweets_${gameId}`;
+    const cachedTweets = this.cache.get<Tweet[]>(cacheKey);
+    
+    if (cachedTweets) {
+      return cachedTweets;
+    }
+
+    try {
+      const searchQuery = `(${teams.home} OR ${teams.away}) (${this.NFL_HASHTAGS.join(' OR ')}) -is:retweet lang:en`;
+      const tweets = await this.client.v2.search({
+        query: searchQuery,
+        'tweet.fields': ['created_at', 'public_metrics', 'entities'],
+        'user.fields': ['username', 'verified'],
+        max_results: 100
+      });
+
+      const processedTweets = tweets.data.map(tweet => ({
+        id: tweet.id,
+        text: tweet.text,
+        created_at: tweet.created_at,
+        metrics: tweet.public_metrics,
+        author: tweet.author_id
+      }));
+
+      this.cache.set(cacheKey, processedTweets);
+      return processedTweets;
+    } catch (error) {
+      this.logger.error(`Error fetching game tweets for ${gameId}:`, error);
+      throw error;
+    }
+  }
+
+  async getAnalystOpinions(gameId: string): Promise<Tweet[]> {
+    const cacheKey = `analyst_tweets_${gameId}`;
+    const cachedTweets = this.cache.get<Tweet[]>(cacheKey);
+    
+    if (cachedTweets) {
+      return cachedTweets;
+    }
+
+    try {
+      const searchQuery = `from:${this.NFL_ACCOUNTS.join(' OR from:')} -is:retweet`;
+      const tweets = await this.client.v2.search({
+        query: searchQuery,
+        'tweet.fields': ['created_at', 'public_metrics', 'entities'],
+        'user.fields': ['username', 'verified'],
+        max_results: 50
+      });
+
+      const processedTweets = tweets.data.map(tweet => ({
+        id: tweet.id,
+        text: tweet.text,
+        created_at: tweet.created_at,
+        metrics: tweet.public_metrics,
+        author: tweet.author_id,
+        isAnalyst: true
+      }));
+
+      this.cache.set(cacheKey, processedTweets);
+      return processedTweets;
+    } catch (error) {
+      this.logger.error('Error fetching analyst opinions:', error);
+      throw error;
+    }
   }
 
   // Utility method to clear cache if needed

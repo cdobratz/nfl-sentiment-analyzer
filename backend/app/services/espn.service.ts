@@ -11,6 +11,8 @@ const cache = new Cache();
 const ESPN_API_BASE = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl';
 const ESPN_SCOREBOARD_URL = `${ESPN_API_BASE}/scoreboard`;
 const ESPN_NEWS_URL = `${ESPN_API_BASE}/news`;
+const ESPN_STATS_URL = `${ESPN_API_BASE}/teams`;
+const ESPN_ODDS_URL = `${ESPN_API_BASE}/odds`;
 
 interface ESPNTeam {
   id: string;
@@ -183,6 +185,46 @@ export class ESPNService {
     } catch (error) {
       this.logger.error(`Error fetching injury report for team ${teamId}:`, error);
       throw new Error('Failed to fetch injury report');
+    }
+  }
+
+  // Get team statistics with 1 hour cache
+  @cache({ ttl: 3600 })
+  async getTeamStats(teamId: string): Promise<any> {
+    try {
+      const response = await axios.get(`${ESPN_STATS_URL}/${teamId}/statistics`);
+      return response.data;
+    } catch (error) {
+      this.logger.error('Error fetching team stats:', error);
+      throw error;
+    }
+  }
+
+  // Get game odds with 5 minute cache
+  @cache({ ttl: 300 })
+  async getGameOdds(gameId: string): Promise<any> {
+    try {
+      const response = await axios.get(`${ESPN_ODDS_URL}?gameId=${gameId}`);
+      return response.data;
+    } catch (error) {
+      this.logger.error('Error fetching game odds:', error);
+      throw error;
+    }
+  }
+
+  // Get historical game data
+  async getHistoricalGames(startDate: string, endDate: string): Promise<GameDetails[]> {
+    try {
+      const response = await axios.get(`${ESPN_SCOREBOARD_URL}`, {
+        params: {
+          dates: `${startDate}-${endDate}`,
+          limit: 100
+        }
+      });
+      return response.data.events.map(this.transformGameData);
+    } catch (error) {
+      this.logger.error('Error fetching historical games:', error);
+      throw error;
     }
   }
 

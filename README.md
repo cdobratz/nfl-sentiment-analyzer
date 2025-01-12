@@ -132,6 +132,54 @@ For production deployment, consider:
 2. Implementing a more sophisticated caching strategy
 3. Using a distributed cache like Redis for multi-instance deployments
 
+## Data Pipeline
+
+The application features a comprehensive data collection and processing pipeline that integrates multiple data sources:
+
+### Data Sources
+1. **ESPN API Integration**
+   - Game details and scores
+   - Team statistics
+   - Game odds
+   - Historical game data
+
+2. **X (Twitter) Integration**
+   - Game-related tweets collection
+   - NFL analyst opinions tracking
+   - Automated sentiment analysis
+   - Trusted NFL analysts tracking
+
+3. **File Upload Support**
+   - Excel (.xlsx) files
+   - JSON files
+   - Automated data validation
+   - Data transformation
+
+### Using the Data Pipeline
+
+1. **Real-time Data Collection**
+   ```typescript
+   const dataCollector = container.resolve(DataCollectionController);
+   const gameData = await dataCollector.collectGameData('gameId');
+   ```
+
+2. **File Upload Processing**
+   ```typescript
+   const uploadedData = await dataCollector.processUploadedFile(file);
+   ```
+
+3. **Historical Data Collection**
+   ```typescript
+   const historicalData = await dataCollector.collectHistoricalData('2024-01-01', '2024-01-31');
+   ```
+
+### Environment Setup
+Required environment variables:
+```env
+TWITTER_BEARER_TOKEN=your_twitter_token
+ESPN_API_KEY=your_espn_key
+```
+
 ## License
 
 MIT License
