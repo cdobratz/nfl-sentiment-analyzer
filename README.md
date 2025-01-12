@@ -180,6 +180,28 @@ TWITTER_BEARER_TOKEN=your_twitter_token
 ESPN_API_KEY=your_espn_key
 ```
 
+## Documentation
+
+Comprehensive documentation for the NFL Sentiment Analyzer project is available in the `/docs` directory:
+
+### Quick Links
+- [Quick Start Guide](docs/wiki/quick_start.md) - Get up and running quickly
+- [Technical Stack](docs/architecture/tech_stack.md) - Detailed overview of our technology choices
+- [Project Requirements](docs/requirements/project_requirements.md) - Project scope and requirements
+- [API Integration Guides](docs/integration/) - Detailed guides for ESPN and Twitter API integration
+
+### Documentation Structure
+```
+docs/
+├── architecture/     # System architecture and design decisions
+├── implementation/   # Implementation details and guidelines
+├── integration/      # Third-party API integration guides
+├── requirements/     # Project requirements and specifications
+└── wiki/            # Quick reference guides and tutorials
+```
+
+For more detailed documentation, see our [Documentation Index](docs/README.md).
+
 ## License
 
 MIT License
