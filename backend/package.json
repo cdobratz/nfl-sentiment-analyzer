@@ -4,6 +4,9 @@
   "description": "Backend service for NFL sentiment analysis",
   "main": "dist/index.js",
   "type": "commonjs",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only app/index.ts",
