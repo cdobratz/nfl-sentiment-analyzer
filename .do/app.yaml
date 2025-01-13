@@ -5,29 +5,34 @@ services:
     github:
       branch: main
       deploy_on_push: true
-      repo: owner/nfl-sentiment-analyzer
+      repo: cdobratz/nfl-sentiment-analyzer
     dockerfile_path: backend/Dockerfile
     source_dir: backend
     http_port: 3000
     instance_size_slug: basic-xxs
     instance_count: 1
+    routes:
+      - path: /api/*
     envs:
       - key: NODE_ENV
         value: production
       - key: MONGODB_URI
-        value: ${mongodb.DATABASE_URL}
+        value: "${MONGODB_URI}"
       - key: ML_API_URL
         value: ${ml-service.PRIVATE_URL}
 
   - name: ml-service
+    github:
+      branch: main
+      deploy_on_push: true
+      repo: cdobratz/nfl-sentiment-analyzer
     dockerfile_path: ml/Dockerfile
     source_dir: ml
     http_port: 8000
-    instance_size_slug: basic-xs  # Slightly larger for ML workloads
+    instance_size_slug: basic-xs
     instance_count: 1
-
-databases:
-  - engine: MONGODB
-    name: nfl-db
-    production: false  # Set to true for production
-    version: "5"
+    routes:
+      - path: /ml/*
+    envs:
+      - key: MONGODB_URI
+        value: "${MONGODB_URI}"
