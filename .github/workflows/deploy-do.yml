@@ -1,0 +1,45 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Log in to DO Container Registry
+        run: doctl registry login --expiry-seconds 600
+
+      - name: Build backend container
+        run: docker build -t registry.digitalocean.com/${{ vars.DO_REGISTRY_NAME }}/nfl-backend:$(echo $GITHUB_SHA | head -c7) -t registry.digitalocean.com/${{ vars.DO_REGISTRY_NAME }}/nfl-backend:latest ./backend
+
+      - name: Build ML service container
+        run: docker build -t registry.digitalocean.com/${{ vars.DO_REGISTRY_NAME }}/nfl-ml:$(echo $GITHUB_SHA | head -c7) -t registry.digitalocean.com/${{ vars.DO_REGISTRY_NAME }}/nfl-ml:latest ./ml
+
+      - name: Push backend image to DO Container Registry
+        run: |
+          docker push registry.digitalocean.com/${{ vars.DO_REGISTRY_NAME }}/nfl-backend:$(echo $GITHUB_SHA | head -c7)
+          docker push registry.digitalocean.com/${{ vars.DO_REGISTRY_NAME }}/nfl-backend:latest
+
+      - name: Push ML service image to DO Container Registry
+        run: |
+          docker push registry.digitalocean.com/${{ vars.DO_REGISTRY_NAME }}/nfl-ml:$(echo $GITHUB_SHA | head -c7)
+          docker push registry.digitalocean.com/${{ vars.DO_REGISTRY_NAME }}/nfl-ml:latest
+
+      - name: Update deployment file
+        run: TAG=$(echo $GITHUB_SHA | head -c7) && sed -i 's|<IMAGE>|registry.digitalocean.com/${{ vars.DO_REGISTRY_NAME }}/nfl-backend:'${TAG}'|' $GITHUB_WORKSPACE/config/deployment.yaml
+
+      - name: Deploy to DigitalOcean App Platform
+        run: |
+          doctl apps update ${{ vars.DO_APP_ID }} --spec .do/app.yaml
