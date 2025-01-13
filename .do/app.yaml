@@ -7,20 +7,21 @@ services:
       deploy_on_push: true
       repo: cdobratz/nfl-sentiment-analyzer
     source_dir: backend
-    build_command: npm install && npm run build
-    run_command: npm start
-    http_port: 3000
-    instance_size_slug: basic-xxs
-    instance_count: 1
-    routes:
-      - path: /api/*
     envs:
       - key: NODE_ENV
+        scope: RUN_AND_BUILD_TIME
         value: production
       - key: MONGODB_URI
         value: "${MONGODB_URI}"
       - key: ML_API_URL
         value: ${ml-service.PRIVATE_URL}
+      - key: PORT
+        value: "3000"
+    http_port: 3000
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    routes:
+      - path: /api/*
 
   - name: ml-service
     github:
@@ -38,3 +39,5 @@ services:
     envs:
       - key: MONGODB_URI
         value: "${MONGODB_URI}"
+      - key: PORT
+        value: "8000"
