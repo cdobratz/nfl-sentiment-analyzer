@@ -7,8 +7,7 @@ services:
       deploy_on_push: true
       repo: cdobratz/nfl-sentiment-analyzer
     source_dir: backend
-    buildpacks:
-      - name: node
+    environment_slug: node-js
     build_command: npm install && npm run build
     run_command: npm start
     http_port: 3000
@@ -30,8 +29,7 @@ services:
       deploy_on_push: true
       repo: cdobratz/nfl-sentiment-analyzer
     source_dir: ml
-    buildpacks:
-      - name: python
+    environment_slug: python
     build_command: pip install -r requirements.txt
     run_command: python -m uvicorn api.main:app --host 0.0.0.0 --port 8000
     http_port: 8000
