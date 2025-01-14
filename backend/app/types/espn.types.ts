@@ -1,3 +1,4 @@
+// Basic types
 export interface ESPNTeam {
   id: string;
   name: string;
@@ -9,61 +10,23 @@ export interface ESPNTeam {
   logo: string;
 }
 
-export interface ESPNCompetitor {
-  team: ESPNTeam;
-  score: string;
-  homeAway: string;
+// API Response types
+export interface ESPNTeamResponse {
+  sports: {
+    leagues: {
+      teams: {
+        team: ESPNTeam;
+      }[];
+    }[];
+  }[];
 }
 
-export interface ESPNVenue {
-  id: string;
-  fullName: string;
-  address: {
-    city: string;
-    state: string;
-  };
-  capacity: number;
-  indoor: boolean;
+export interface ESPNEventResponse {
+  events: ESPNEvent[];
 }
 
-export interface ESPNOdds {
-  details: string;
-  overUnder: number;
-  spread: number;
-}
-
-export interface ESPNWeather {
-  displayValue: string;
-  temperature: number;
-  conditionId: string;
-}
-
-export interface ESPNOfficial {
-  displayName: string;
-  position: string;
-}
-
-export interface ESPNStatusType {
-  id: string;
-  name: string;
-  state: string;
-  completed: boolean;
-}
-
-export interface ESPNCompetition {
-  id: string;
-  competitors: ESPNCompetitor[];
-  venue: ESPNVenue;
-  attendance: number;
-  weather: ESPNWeather;
-  officials: ESPNOfficial[];
-  odds: ESPNOdds[];
-  status: {
-    type: ESPNStatusType;
-  };
-}
-
-export interface ESPNGame {
+// Event types
+export interface ESPNEvent {
   id: string;
   date: string;
   name: string;
@@ -72,62 +35,49 @@ export interface ESPNGame {
     year: number;
     type: number;
   };
-  week: {
-    number: number;
-  };
-  competitions: ESPNCompetition[];
-  status: {
-    type: ESPNStatusType;
-  };
-  homeTeam: ESPNTeam;
-  awayTeam: ESPNTeam;
-}
-
-export interface InjuryReport {
-  team: ESPNTeam;
-  players: {
+  competitions: {
     id: string;
-    fullName: string;
-    position: string;
-    status: string;
-    injury: {
-      type: string;
-      details: string;
+    date: string;
+    competitors: {
+      id: string;
+      homeAway: 'home' | 'away';
+      winner?: boolean;
+      team: ESPNTeam;
+      score?: string;
+    }[];
+    venue?: {
+      fullName: string;
+      city: string;
+      state: string;
     };
+    odds?: {
+      details: string;
+      overUnder: number;
+    }[];
   }[];
 }
 
+// Simplified game details
 export interface GameDetails {
   id: string;
-  season: number;
-  seasonType: string;
   date: string;
+  name: string;
   homeTeam: {
-    id: string;
-    name: string;
-    score: string;
-    stats: any;
+    team: ESPNTeam;
+    score?: string;
+    isWinner?: boolean;
   };
   awayTeam: {
-    id: string;
-    name: string;
-    score: string;
-    stats: any;
+    team: ESPNTeam;
+    score?: string;
+    isWinner?: boolean;
   };
-  odds: ESPNOdds;
-  venue: string;
-  attendance: number;
-  weather: string;
-  officials: string[];
-}
-
-export interface ESPNNewsArticle {
-  headline: string;
-  description: string;
-  published: string;
-  links: {
-    web: {
-      href: string;
-    };
+  venue?: {
+    name: string;
+    location: string;
+  };
+  odds?: {
+    details: string;
+    overUnder: number;
   };
 }

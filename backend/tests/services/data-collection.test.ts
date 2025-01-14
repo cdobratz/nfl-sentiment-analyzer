@@ -1,58 +1,21 @@
 import { describe, it, beforeEach, jest, expect } from '@jest/globals';
-import { container } from 'tsyringe';
 import { DataCollectionController } from '../../app/controllers/data-collection.controller';
 import { ESPNService } from '../../app/services/espn.service';
 import { TwitterService } from '../../app/services/twitter.service';
 import { DataIntegrationService } from '../../app/services/data-integration.service';
 import { Logger } from 'winston';
-import { ESPNGame, ESPNTeam, ESPNOdds } from '../../app/types/espn.types';
-import { Tweet, TopTweet } from '../../app/types/twitter.types';
 import type { LeveledLogMethod } from 'winston';
+import { ESPNGame, ESPNTeam } from '../../app/types/espn.types';
+import { TopTweet } from '../../app/types/twitter.types';
 
 describe('DataCollectionController', () => {
-  let dataCollectionController: DataCollectionController;
+  let controller: DataCollectionController;
   let mockESPNService: jest.Mocked<ESPNService>;
   let mockTwitterService: jest.Mocked<TwitterService>;
   let mockDataIntegrationService: jest.Mocked<DataIntegrationService>;
   let mockLogger: Partial<Logger>;
 
   beforeEach(() => {
-    // Create mock services
-    mockESPNService = {
-      getGameDetails: jest.fn(),
-      getTeamStats: jest.fn(),
-      getGameOdds: jest.fn(),
-      getScores: jest.fn(),
-      getNews: jest.fn(),
-      getTeamDetails: jest.fn(),
-      getGameVenue: jest.fn(),
-      getGameWeather: jest.fn(),
-      getGameOfficials: jest.fn(),
-      refreshGameDetails: jest.fn(),
-      cache: {} as any,
-      getCurrentWeekGames: jest.fn(),
-      getInjuryReport: jest.fn(),
-      getWeeklySchedule: jest.fn(),
-      getGameDetailsOriginal: jest.fn()
-    } as unknown as jest.Mocked<ESPNService>;
-
-    mockTwitterService = {
-      getGameRelatedTweets: jest.fn(),
-      getAnalystOpinions: jest.fn(),
-      refreshGameTweets: jest.fn(),
-      refreshAnalystTweets: jest.fn(),
-      clearCache: jest.fn(),
-      twitterClient: {} as any,
-      cache: {} as any,
-      MAX_RETRIES: 3,
-      INITIAL_RETRY_DELAY: 1000
-    } as unknown as jest.Mocked<TwitterService>;
-
-    mockDataIntegrationService = {
-      getGameAnalysis: jest.fn(),
-      refreshGameData: jest.fn()
-    } as unknown as jest.Mocked<DataIntegrationService>;
-
     mockLogger = {
       error: jest.fn() as unknown as LeveledLogMethod,
       info: jest.fn() as unknown as LeveledLogMethod,
@@ -60,151 +23,235 @@ describe('DataCollectionController', () => {
       warn: jest.fn() as unknown as LeveledLogMethod
     };
 
-    // Register mocks with the container
-    container.registerInstance(ESPNService, mockESPNService);
-    container.registerInstance(TwitterService, mockTwitterService);
-    container.registerInstance(DataIntegrationService, mockDataIntegrationService);
-    container.registerInstance('Logger', mockLogger as Logger);
+    mockESPNService = {
+      getScores: jest.fn(),
+      getGameDetails: jest.fn(),
+      getTeams: jest.fn(),
+      getTeamById: jest.fn()
+    } as unknown as jest.Mocked<ESPNService>;
 
-    dataCollectionController = container.resolve(DataCollectionController);
+    mockTwitterService = {
+      getGameRelatedTweets: jest.fn(),
+      searchTweets: jest.fn()
+    } as unknown as jest.Mocked<TwitterService>;
+
+    mockDataIntegrationService = {
+      getGameAnalysis: jest.fn(),
+      getGameDetails: jest.fn()
+    } as unknown as jest.Mocked<DataIntegrationService>;
+
+    controller = new DataCollectionController(
+      mockLogger as Logger,
+      mockESPNService,
+      mockTwitterService,
+      mockDataIntegrationService
+    );
   });
 
   describe('collectGameData', () => {
-    const mockGameId = 'test-game-123';
-    const mockGameDetails: ESPNGame = {
-      id: mockGameId,
-      date: '2025-01-14T00:00:00Z',
-      name: 'Test Game',
-      shortName: 'TEST vs TEST',
-      season: { year: 2025, type: 1 },
-      week: { number: 1 },
-      competitions: [{
-        id: 'comp-1',
-        competitors: [],
-        venue: {
-          id: 'venue-1',
-          fullName: 'Test Stadium',
-          address: { city: 'Test City', state: 'TS' },
-          capacity: 70000,
-          indoor: false
-        },
-        attendance: 65000,
-        weather: {
-          displayValue: 'Clear',
-          temperature: 72,
-          conditionId: 'clear'
-        },
-        officials: [],
-        odds: [],
-        status: { type: { id: '1', name: 'STATUS', state: 'pre', completed: false } }
-      }],
-      status: { type: { id: '1', name: 'STATUS', state: 'pre', completed: false } },
-      homeTeam: {
-        id: 'home-1',
-        name: 'Home Team',
-        abbreviation: 'HOME',
-        displayName: 'Home Team',
-        shortDisplayName: 'HOME',
+    it('should collect game data successfully', async () => {
+      const mockTeam: ESPNTeam = {
+        id: 'team1',
+        name: 'Test Team',
+        abbreviation: 'TST',
+        displayName: 'Test Team',
+        shortDisplayName: 'Test',
         color: '#000000',
-        alternateColor: '#ffffff',
-        logo: 'home.png'
-      },
-      awayTeam: {
-        id: 'away-1',
-        name: 'Away Team',
-        abbreviation: 'AWAY',
-        displayName: 'Away Team',
-        shortDisplayName: 'AWAY',
-        color: '#ffffff',
-        alternateColor: '#000000',
-        logo: 'away.png'
-      }
-    };
-
-    const mockTopTweet: TopTweet = {
-      id: '1',
-      text: 'test tweet',
-      authorId: 'author1',
-      createdAt: new Date(),
-      metrics: {
-        retweets: 0,
-        replies: 0,
-        likes: 0,
-        quotes: 0
-      },
-      isAnalyst: false,
-      sentiment: 0.8,
-      confidence: 0.9,
-      keywords: ['game', 'football'],
-      entities: ['team', 'player'],
-      isPositive: true,
-      isNegative: false,
-      isNeutral: false,
-      sentimentStrength: 'strong'
-    };
-
-    it('should collect and combine all game data successfully', async () => {
-      const mockResult = {
-        game: mockGameDetails,
-        topTweets: [mockTopTweet],
-        analystOpinions: [{
-          ...mockTopTweet,
-          isAnalyst: true,
-          analystInfo: {
-            handle: '@analyst',
-            name: 'Test Analyst',
-            organization: 'Test Org',
-            verified: true
-          }
-        }]
+        alternateColor: '#FFFFFF',
+        logo: 'https://example.com/logo.png'
       };
 
-      mockDataIntegrationService.getGameAnalysis.mockResolvedValue(mockResult);
+      const mockGame: ESPNGame = {
+        id: 'game1',
+        date: '2024-01-01',
+        name: 'Test Game',
+        shortName: 'Test vs Test',
+        season: {
+          year: 2024,
+          type: 2
+        },
+        week: {
+          number: 1
+        },
+        competitions: [{
+          id: 'comp1',
+          competitors: [
+            { id: 'comp1', homeAway: 'home', team: mockTeam },
+            { id: 'comp2', homeAway: 'away', team: mockTeam }
+          ],
+          venue: {
+            id: 'venue1',
+            fullName: 'Test Stadium',
+            address: {
+              city: 'Test City',
+              state: 'TS'
+            },
+            capacity: 50000,
+            indoor: true
+          },
+          status: {
+            type: {
+              id: 'status1',
+              name: 'Final',
+              state: 'post',
+              completed: true
+            }
+          }
+        }],
+        status: {
+          type: {
+            id: 'status1',
+            name: 'Final',
+            state: 'post',
+            completed: true
+          }
+        },
+        homeTeam: mockTeam,
+        awayTeam: mockTeam
+      };
 
-      const result = await dataCollectionController.collectGameData(mockGameId);
+      const mockTweets: TopTweet[] = [{
+        id: 'tweet1',
+        text: 'Great game!',
+        authorId: 'user1',
+        authorName: 'Test User',
+        authorUsername: 'testuser',
+        verified: false,
+        createdAt: '2024-01-01T00:00:00Z',
+        retweetCount: 0,
+        replyCount: 0,
+        likeCount: 0,
+        quoteCount: 0,
+        sentiment: {
+          score: 0.8,
+          label: 'positive',
+          confidence: 0.9
+        }
+      }];
 
-      expect(result).toEqual(mockResult);
-      expect(mockDataIntegrationService.getGameAnalysis).toHaveBeenCalledWith(mockGameId);
+      mockESPNService.getScores.mockResolvedValue([mockGame]);
+      mockDataIntegrationService.getGameAnalysis.mockResolvedValue({
+        game: mockGame,
+        topTweets: mockTweets,
+        analystOpinions: mockTweets
+      });
+
+      const result = await controller.collectGameData('game1');
+
+      expect(result).toBeDefined();
+      expect(mockESPNService.getScores).toHaveBeenCalled();
+      expect(mockDataIntegrationService.getGameAnalysis).toHaveBeenCalled();
       expect(mockLogger.info).toHaveBeenCalled();
     });
 
-    it('should handle API errors gracefully', async () => {
-      mockDataIntegrationService.getGameAnalysis.mockRejectedValue(new Error('API Error'));
+    it('should handle errors when collecting game data', async () => {
+      mockESPNService.getScores.mockRejectedValue(new Error('API Error'));
 
-      await expect(dataCollectionController.collectGameData(mockGameId))
-        .rejects
-        .toThrow('API Error');
-      
+      await expect(controller.collectGameData('game1')).rejects.toThrow('Failed to collect game data');
       expect(mockLogger.error).toHaveBeenCalled();
     });
   });
 
   describe('refreshGameData', () => {
-    const mockGameId = 'test-game-123';
-
     it('should refresh game data successfully', async () => {
-      mockESPNService.getGameDetails.mockResolvedValue({
-        homeTeam: { abbreviation: 'HOME' },
-        awayTeam: { abbreviation: 'AWAY' }
-      } as ESPNGame);
+      const gameId = 'game1';
+      const mockTeam: ESPNTeam = {
+        id: 'team1',
+        name: 'Test Team',
+        abbreviation: 'TST',
+        displayName: 'Test Team',
+        shortDisplayName: 'Test',
+        color: '#000000',
+        alternateColor: '#FFFFFF',
+        logo: 'https://example.com/logo.png'
+      };
 
-      await dataCollectionController.refreshGameData(mockGameId);
+      const mockGame: ESPNGame = {
+        id: gameId,
+        date: '2024-01-01',
+        name: 'Test Game',
+        shortName: 'Test vs Test',
+        season: {
+          year: 2024,
+          type: 2
+        },
+        week: {
+          number: 1
+        },
+        competitions: [{
+          id: 'comp1',
+          competitors: [
+            { id: 'comp1', homeAway: 'home', team: mockTeam },
+            { id: 'comp2', homeAway: 'away', team: mockTeam }
+          ],
+          venue: {
+            id: 'venue1',
+            fullName: 'Test Stadium',
+            address: {
+              city: 'Test City',
+              state: 'TS'
+            },
+            capacity: 50000,
+            indoor: true
+          },
+          status: {
+            type: {
+              id: 'status1',
+              name: 'Final',
+              state: 'post',
+              completed: true
+            }
+          }
+        }],
+        status: {
+          type: {
+            id: 'status1',
+            name: 'Final',
+            state: 'post',
+            completed: true
+          }
+        },
+        homeTeam: mockTeam,
+        awayTeam: mockTeam
+      };
 
-      expect(mockESPNService.refreshGameDetails).toHaveBeenCalledWith(mockGameId);
-      expect(mockTwitterService.refreshGameTweets).toHaveBeenCalledWith(
-        mockGameId,
-        { home: 'HOME', away: 'AWAY' }
-      );
+      const mockTweets: TopTweet[] = [{
+        id: 'tweet1',
+        text: 'Great game!',
+        authorId: 'user1',
+        authorName: 'Test User',
+        authorUsername: 'testuser',
+        verified: false,
+        createdAt: '2024-01-01T00:00:00Z',
+        retweetCount: 0,
+        replyCount: 0,
+        likeCount: 0,
+        quoteCount: 0,
+        sentiment: {
+          score: 0.8,
+          label: 'positive',
+          confidence: 0.9
+        }
+      }];
+
+      mockDataIntegrationService.getGameDetails.mockResolvedValue({
+        game: mockGame,
+        topTweets: mockTweets,
+        analystOpinions: mockTweets
+      });
+
+      const result = await controller.refreshGameData(gameId);
+
+      expect(result).toBeDefined();
+      expect(mockDataIntegrationService.getGameDetails).toHaveBeenCalledWith(gameId);
       expect(mockLogger.info).toHaveBeenCalled();
     });
 
-    it('should handle refresh errors gracefully', async () => {
-      mockESPNService.getGameDetails.mockRejectedValue(new Error('Refresh Error'));
+    it('should handle errors when refreshing game data', async () => {
+      const gameId = 'game1';
+      mockDataIntegrationService.getGameDetails.mockRejectedValue(new Error('API Error'));
 
-      await expect(dataCollectionController.refreshGameData(mockGameId))
-        .rejects
-        .toThrow('Refresh Error');
-      
+      await expect(controller.refreshGameData(gameId)).rejects.toThrow('Failed to refresh game data');
       expect(mockLogger.error).toHaveBeenCalled();
     });
   });

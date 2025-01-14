@@ -1,12 +1,12 @@
-import { Logger } from 'winston';
+import { Logger, LeveledLogMethod } from 'winston';
 import { TwitterService } from '../services/twitter.service';
 import { Tweet } from '../types/twitter.types';
 
 async function main() {
   const logger = {
-    info: (...args: any[]) => console.log(...args),
-    error: (...args: any[]) => console.error(...args),
-    warn: (...args: any[]) => console.warn(...args)
+    info: ((...params: Parameters<LeveledLogMethod>) => console.log(...params)) as LeveledLogMethod,
+    error: ((...params: Parameters<LeveledLogMethod>) => console.error(...params)) as LeveledLogMethod,
+    warn: ((...params: Parameters<LeveledLogMethod>) => console.warn(...params)) as LeveledLogMethod
   } as Logger;
 
   const twitterService = new TwitterService(logger);

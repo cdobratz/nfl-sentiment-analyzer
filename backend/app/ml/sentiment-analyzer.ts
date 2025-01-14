@@ -8,7 +8,7 @@ export interface SentimentResult {
 
 @injectable()
 export class SentimentAnalyzer {
-  async analyze(text: string): Promise<SentimentResult> {
+  async analyze(input: string): Promise<SentimentResult> {
     // Implementation details would go here
     // For now, we'll return a mock result
     return {

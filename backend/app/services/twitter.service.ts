@@ -259,12 +259,12 @@ export class TwitterService {
     }
   }
 
-  private convertTweetToInternalFormat(tweet: TweetV2): Tweet {
+  private convertTweetToInternalFormat(tweet: any): Tweet {
     return {
       id: tweet.id,
       text: tweet.text,
-      authorId: tweet.author_id || '',
-      createdAt: tweet.created_at ? new Date(tweet.created_at) : new Date(),
+      authorId: tweet.author_id ?? 'unknown',
+      createdAt: tweet.created_at ?? new Date().toISOString(),
       metrics: this.mapTwitterMetricsToCustomFormat(tweet.public_metrics),
       isAnalyst: false
     };

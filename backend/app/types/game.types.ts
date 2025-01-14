@@ -4,7 +4,7 @@ export interface TeamData {
   id: string;
   name: string;
   score: string;
-  stats: any;
+  stats: Record<string, string | number>;
 }
 
 export interface GameData {
@@ -21,10 +21,5 @@ export interface GameData {
   };
   tweets: Tweet[];
   analystOpinions: Tweet[];
-  gameDetails: {
-    venue?: string;
-    attendance?: number;
-    weather?: string;
-    officials?: string[];
-  };
+  gameDetails: Record<string, string | number>;
 }

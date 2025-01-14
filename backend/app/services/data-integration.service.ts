@@ -1,7 +1,7 @@
 import { injectable } from 'tsyringe';
 import { Logger } from 'winston';
-import { Tweet, TopTweet, AnalystData } from '../types/twitter.types';
-import { SentimentAnalyzer, SentimentResult } from '../ml/sentiment-analyzer';
+import { Tweet, TopTweet } from '../types/twitter.types';
+import { SentimentAnalyzer } from '../ml/sentiment-analyzer';
 import { ESPNService } from './espn.service';
 import { TwitterService } from './twitter.service';
 import { ESPNGame, ESPNCompetitor } from '../types/espn.types';

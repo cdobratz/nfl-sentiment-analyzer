@@ -2,7 +2,6 @@ import { describe, it, beforeEach, jest, expect } from '@jest/globals';
 import { FileUploadService } from '../../app/services/file-upload.service';
 import { Logger } from 'winston';
 import type { LeveledLogMethod } from 'winston';
-import { GameData } from '../../app/types/game.types';
 
 // Mock xlsx module
 jest.mock('xlsx', () => ({

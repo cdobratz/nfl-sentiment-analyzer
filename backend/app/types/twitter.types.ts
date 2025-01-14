@@ -16,15 +16,18 @@ export interface Tweet {
   id: string;
   text: string;
   authorId: string;
-  createdAt: Date;
+  createdAt: string;
   metrics: TweetMetrics;
   isAnalyst: boolean;
   analystInfo?: AnalystInfo;
 }
 
 export interface TopTweet extends Tweet {
-  sentiment: number;
-  confidence: number;
+  sentiment: {
+    score: number;
+    label: string;
+    confidence: number;
+  };
   keywords?: string[];
   entities?: string[];
   isPositive: boolean;
@@ -51,8 +54,8 @@ export interface SentimentResult {
   text: string;
   sentiment: {
     score: number;
+    label: string;
     confidence: number;
-    label: 'positive' | 'negative' | 'neutral';
   };
 }
 

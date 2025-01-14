@@ -1,10 +1,7 @@
 name: Deploy to DigitalOcean
 
 on:
-  workflow_run:
-    workflows: ['ML Pipeline', 'Backend Pipeline']
-    types:
-      - completed
+  push:
     branches:
       - main
   workflow_dispatch:
@@ -14,31 +11,57 @@ permissions:
   issues: write
 
 env:
-  REGISTRY: "registry.digitalocean.com/nfl-analyzer"
+  DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
+  APP_NAME: nfl-analysis
+  REGISTRY: registry.digitalocean.com
+  REGISTRY_IMAGE: ${{ secrets.REGISTRY_NAME }}
   ML_IMAGE: "nfl-ml-service"
   BACKEND_IMAGE: "nfl-backend"
   APP_URL: "nfl-sentiment-analyzer-jxf4g.ondigitalocean.app"
 
 jobs:
+  build_and_push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DO_API_TOKEN }}
+
+      - name: Log in to DO Container Registry
+        run: doctl registry login --expiry-seconds 600
+
+      - name: Build and push
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}/${{ env.APP_NAME }}:${{ github.sha }} .
+          docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}/${{ env.APP_NAME }}:${{ github.sha }}
+
   deploy:
+    needs: build_and_push
     runs-on: ubuntu-latest
     environment: production
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Install doctl
-        uses: digitalocean/action-doctl@v2
+      - name: Deploy to Digital Ocean App Platform
+        uses: digitalocean/app_action@v1.1.5
         with:
-          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-
-      - name: Update App Platform deployment
-        run: |
-          doctl apps update ${{ secrets.DO_APP_ID }} \
-            --spec .do/app.yaml \
-            --wait
+          app_name: ${{ env.APP_NAME }}
+          token: ${{ secrets.DO_API_TOKEN }}
+          images: |
+            [
+              {
+                "name": "${{ env.APP_NAME }}",
+                "image": {
+                  "registry": "${{ env.REGISTRY }}",
+                  "repository": "${{ env.REGISTRY_IMAGE }}/${{ env.APP_NAME }}",
+                  "tag": "${{ github.sha }}"
+                }
+              }
+            ]
 
       - name: Wait for deployment
         run: sleep 30
