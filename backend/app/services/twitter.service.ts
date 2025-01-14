@@ -172,39 +172,36 @@ export class TwitterService {
         max_results: 100
       });
   
-      if (!timelineResult?.data) {
-        return [];
-      }
+      // Get all tweets using the paginator's data property
+      const tweets = timelineResult.tweets || [];
   
-      // Extract tweets from the paginator
-      const tweets = Array.isArray(timelineResult.data) 
-        ? timelineResult.data 
-        : [timelineResult.data];
-  
-      // Map each tweet to ensure it matches TweetV2 interface
-      return tweets.map(rawTweet => ({
-        id: rawTweet.id,
-        text: rawTweet.text,
-        edit_history_tweet_ids: rawTweet.edit_history_tweet_ids || [rawTweet.id],
-        author_id: rawTweet.author_id || '',
-        created_at: rawTweet.created_at || new Date().toISOString(),
-        entities: rawTweet.entities ?? {
-          annotations: [],
-          urls: [],
-          hashtags: [],
-          cashtags: [],
-          mentions: []
-        },
-        lang: rawTweet.lang || 'en',
-        possibly_sensitive: rawTweet.possibly_sensitive || false,
-        public_metrics: {
-          retweet_count: rawTweet.public_metrics?.retweet_count ?? 0,
-          reply_count: rawTweet.public_metrics?.reply_count ?? 0,
-          like_count: rawTweet.public_metrics?.like_count ?? 0,
-          quote_count: rawTweet.public_metrics?.quote_count ?? 0,
-          impression_count: 0
-        }
-      })) as TweetV2[];
+      // Map the tweets to ensure they conform to TweetV2 interface
+      return tweets.map(tweet => {
+        const tweetV2: TweetV2 = {
+          id: tweet.id,
+          text: tweet.text,
+          edit_history_tweet_ids: tweet.edit_history_tweet_ids ?? [tweet.id],
+          author_id: tweet.author_id,
+          created_at: tweet.created_at,
+          public_metrics: tweet.public_metrics ?? {
+            retweet_count: 0,
+            reply_count: 0,
+            like_count: 0,
+            quote_count: 0,
+            impression_count: 0
+          },
+          entities: tweet.entities ?? {
+            annotations: [],
+            urls: [],
+            hashtags: [],
+            cashtags: [],
+            mentions: []
+          },
+          lang: tweet.lang ?? 'en',
+          possibly_sensitive: tweet.possibly_sensitive ?? false
+        };
+        return tweetV2;
+      });
     } catch (error) {
       this.logger.error('Error searching tweets:', error);
       return [];
