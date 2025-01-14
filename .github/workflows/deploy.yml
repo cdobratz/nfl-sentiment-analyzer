@@ -26,6 +26,6 @@ jobs:
 
       - name: Update App Platform deployment
         run: |
-          doctl apps update "${{ secrets.DO_APP_ID }}" \
+          doctl apps update 044e5102-ebfe-4a51-9167-5db61ab8c65e \
             --spec .do/app.yaml \
             --wait
