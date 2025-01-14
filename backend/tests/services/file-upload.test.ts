@@ -1,36 +1,54 @@
 import { describe, it, beforeEach, jest, expect } from '@jest/globals';
-import { container } from 'tsyringe';
 import { FileUploadService } from '../../app/services/file-upload.service';
 import { Logger } from 'winston';
-import * as xlsx from 'xlsx';
+import type { LeveledLogMethod } from 'winston';
+import { GameData } from '../../app/types/game.types';
 
-jest.mock('xlsx');
+// Mock xlsx module
+jest.mock('xlsx', () => ({
+  read: jest.fn(),
+  utils: {
+    sheet_to_json: jest.fn()
+  }
+}));
+
+// Import mocked xlsx
+import * as xlsx from 'xlsx';
 
 describe('FileUploadService', () => {
   let fileUploadService: FileUploadService;
-  let mockLogger: jest.Mocked<Logger>;
+  let mockLogger: Partial<Logger>;
 
   beforeEach(() => {
     mockLogger = {
-      error: jest.fn(),
-      info: jest.fn(),
-    } as any;
+      error: jest.fn() as unknown as LeveledLogMethod,
+      info: jest.fn() as unknown as LeveledLogMethod,
+      debug: jest.fn() as unknown as LeveledLogMethod,
+      warn: jest.fn() as unknown as LeveledLogMethod
+    };
 
-    container.registerInstance('Logger', mockLogger);
-    fileUploadService = container.resolve(FileUploadService);
+    // Create service directly instead of using container
+    fileUploadService = new FileUploadService(mockLogger as Logger);
+
+    // Clear all mocks before each test
+    jest.clearAllMocks();
   });
 
   describe('processExcelFile', () => {
-    const mockValidData = [
-      {
+    it('should process Excel file and return game data', async () => {
+      const mockBuffer = Buffer.from('test');
+      const mockGameData = {
         gameId: 'game-1',
-        homeTeam: 'Team A',
-        awayTeam: 'Team B',
+        homeTeam: 'Home Team',
+        awayTeam: 'Away Team',
         date: '2024-01-01',
-      },
-    ];
+        odds: {
+          spread: '-3.5',
+          overUnder: 45.5
+        }
+      };
 
-    it('should process valid Excel files correctly', async () => {
+      // Mock xlsx functions
       (xlsx.read as jest.Mock).mockReturnValue({
         SheetNames: ['Sheet1'],
         Sheets: {
@@ -38,59 +56,102 @@ describe('FileUploadService', () => {
         },
       });
 
-      (xlsx.utils.sheet_to_json as jest.Mock).mockReturnValue(mockValidData);
+      (xlsx.utils.sheet_to_json as jest.Mock).mockReturnValue([mockGameData]);
 
-      const result = await fileUploadService.processExcelFile(Buffer.from('test'));
+      const result = await fileUploadService.processExcelFile(mockBuffer);
 
-      expect(result).toEqual(mockValidData);
-      expect(xlsx.read).toHaveBeenCalled();
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(mockGameData);
+      expect(xlsx.read).toHaveBeenCalledWith(mockBuffer);
       expect(xlsx.utils.sheet_to_json).toHaveBeenCalled();
     });
 
-    it('should handle invalid Excel files', async () => {
+    it('should handle Excel processing errors', async () => {
+      const mockBuffer = Buffer.from('test');
+
+      // Mock xlsx functions to throw error
       (xlsx.read as jest.Mock).mockImplementation(() => {
         throw new Error('Invalid Excel file');
       });
 
-      await expect(fileUploadService.processExcelFile(Buffer.from('test')))
+      await expect(fileUploadService.processExcelFile(mockBuffer))
         .rejects
         .toThrow('Invalid Excel file format');
+
+      expect(mockLogger.error).toHaveBeenCalled();
+      expect(xlsx.read).toHaveBeenCalledWith(mockBuffer);
+    });
+
+    it('should handle data validation errors', async () => {
+      const mockBuffer = Buffer.from('test');
+      const invalidData = [{
+        homeTeam: 'Home Team', // Missing required fields
+        awayTeam: 'Away Team'
+      }];
+
+      (xlsx.read as jest.Mock).mockReturnValue({
+        SheetNames: ['Sheet1'],
+        Sheets: {
+          Sheet1: {},
+        },
+      });
+
+      (xlsx.utils.sheet_to_json as jest.Mock).mockReturnValue(invalidData);
+
+      await expect(fileUploadService.processExcelFile(mockBuffer))
+        .rejects
+        .toThrow('Invalid Excel file format');
+
+      expect(mockLogger.error).toHaveBeenCalled();
+      expect(xlsx.read).toHaveBeenCalledWith(mockBuffer);
+      expect(xlsx.utils.sheet_to_json).toHaveBeenCalled();
     });
   });
 
   describe('processJsonFile', () => {
-    const mockValidJson = [
-      {
+    it('should process JSON file and return game data', async () => {
+      const mockGameData = {
         gameId: 'game-1',
-        homeTeam: 'Team A',
-        awayTeam: 'Team B',
+        homeTeam: 'Home Team',
+        awayTeam: 'Away Team',
         date: '2024-01-01',
-      },
-    ];
+        odds: {
+          spread: '-3.5',
+          overUnder: 45.5
+        }
+      };
 
-    it('should process valid JSON files correctly', async () => {
-      const result = await fileUploadService.processJsonFile(
-        Buffer.from(JSON.stringify(mockValidJson))
-      );
+      const mockBuffer = Buffer.from(JSON.stringify([mockGameData]));
 
-      expect(result).toEqual(mockValidJson);
+      const result = await fileUploadService.processJsonFile(mockBuffer);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(mockGameData);
     });
 
-    it('should handle invalid JSON files', async () => {
-      await expect(fileUploadService.processJsonFile(Buffer.from('invalid json')))
+    it('should handle JSON processing errors', async () => {
+      const mockBuffer = Buffer.from('invalid json');
+
+      await expect(fileUploadService.processJsonFile(mockBuffer))
         .rejects
         .toThrow('Invalid JSON file format');
+
+      expect(mockLogger.error).toHaveBeenCalled();
     });
 
-    it('should validate JSON data structure', async () => {
+    it('should handle data validation errors', async () => {
       const invalidData = [{
-        // Missing required fields
-        team: 'Team A',
+        homeTeam: 'Home Team', // Missing required fields
+        awayTeam: 'Away Team'
       }];
 
-      await expect(
-        fileUploadService.processJsonFile(Buffer.from(JSON.stringify(invalidData)))
-      ).rejects.toThrow('Invalid data format');
+      const mockBuffer = Buffer.from(JSON.stringify(invalidData));
+
+      await expect(fileUploadService.processJsonFile(mockBuffer))
+        .rejects
+        .toThrow('Invalid JSON file format');
+
+      expect(mockLogger.error).toHaveBeenCalled();
     });
   });
 });
