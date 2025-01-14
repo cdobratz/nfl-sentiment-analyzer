@@ -157,7 +157,7 @@ export class TwitterService {
 
   private async searchTweets(query: string): Promise<TweetV2[]> {
     try {
-      const response = await this.twitterClient.v2.search(query, {
+      const timelineResult = await this.twitterClient.v2.search(query, {
         'tweet.fields': [
           'author_id',
           'created_at',
@@ -172,36 +172,36 @@ export class TwitterService {
         max_results: 100
       });
 
-      // Ensure response has data and convert to array if needed
-      const tweets = response?.data ? (Array.isArray(response.data) ? response.data : [response.data]) : [];
+      if (!timelineResult?.data) {
+        return [];
+      }
+
+      // Access the data property first, then map over the tweets
+      const tweets = Array.isArray(timelineResult.data) ? timelineResult.data : [timelineResult.data];
       
-      // Map each tweet to ensure it matches TweetV2 interface
-      return tweets.map((tweet: Partial<TweetV2>) => {
-        const tweetV2: TweetV2 = {
-          id: tweet.id || '',
-          text: tweet.text || '',
-          edit_history_tweet_ids: tweet.edit_history_tweet_ids || [tweet.id || ''],
-          author_id: tweet.author_id || '',
-          created_at: tweet.created_at || new Date().toISOString(),
-          entities: tweet.entities || {
-            annotations: [],
-            urls: [],
-            hashtags: [],
-            cashtags: [],
-            mentions: []
-          },
-          lang: tweet.lang || 'en',
-          possibly_sensitive: tweet.possibly_sensitive || false,
-          public_metrics: {
-            retweet_count: tweet.public_metrics?.retweet_count ?? 0,
-            reply_count: tweet.public_metrics?.reply_count ?? 0,
-            like_count: tweet.public_metrics?.like_count ?? 0,
-            quote_count: tweet.public_metrics?.quote_count ?? 0,
-            impression_count: 0
-          }
-        };
-        return tweetV2;
-      });
+      return tweets.map((rawTweet: TweetV2) => ({
+        id: rawTweet.id,
+        text: rawTweet.text,
+        edit_history_tweet_ids: rawTweet.edit_history_tweet_ids || [rawTweet.id],
+        author_id: rawTweet.author_id || '',
+        created_at: rawTweet.created_at || new Date().toISOString(),
+        entities: rawTweet.entities || {
+          annotations: [],
+          urls: [],
+          hashtags: [],
+          cashtags: [],
+          mentions: []
+        },
+        lang: rawTweet.lang || 'en',
+        possibly_sensitive: rawTweet.possibly_sensitive || false,
+        public_metrics: {
+          retweet_count: rawTweet.public_metrics?.retweet_count ?? 0,
+          reply_count: rawTweet.public_metrics?.reply_count ?? 0,
+          like_count: rawTweet.public_metrics?.like_count ?? 0,
+          quote_count: rawTweet.public_metrics?.quote_count ?? 0,
+          impression_count: 0
+        }
+      }));
     } catch (error) {
       this.logger.error('Error searching tweets:', error);
       return [];
