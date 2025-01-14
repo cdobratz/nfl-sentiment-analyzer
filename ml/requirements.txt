@@ -1,5 +1,6 @@
 # Core ML dependencies - CPU only versions
-torch==2.0.0+cpu
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.0.0
 transformers==4.30.0
 scikit-learn==1.3.0
 nltk==3.8.1

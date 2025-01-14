@@ -1,19 +1,25 @@
 name: Deploy to DigitalOcean
 
 on:
-  push:
+  workflow_run:
+    workflows: ['ML Pipeline', 'Backend Pipeline']
+    types:
+      - completed
     branches:
       - main
   workflow_dispatch:
 
 env:
-  REGISTRY: "registry.digitalocean.com/nfl-sentiment"
-  IMAGE_NAME: "nfl-sentiment-analyzer"
+  REGISTRY: "registry.digitalocean.com/nfl-analyzer"
+  ML_IMAGE: "nfl-ml-service"
+  BACKEND_IMAGE: "nfl-backend"
+  APP_URL: "nfl-sentiment-analyzer-jxf4g.ondigitalocean.app"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
     steps:
       - name: Checkout code
@@ -26,6 +32,28 @@ jobs:
 
       - name: Update App Platform deployment
         run: |
-          doctl apps update 044e5102-ebfe-4a51-9167-5db61ab8c65e \
+          doctl apps update ${{ secrets.DO_APP_ID }} \
             --spec .do/app.yaml \
             --wait
+
+      - name: Wait for deployment
+        run: sleep 30
+
+      - name: Run health checks
+        run: |
+          # Check ML service health
+          curl --fail --retry 3 --retry-delay 5 https://${APP_URL}/ml/health || exit 1
+          # Check Backend service health
+          curl --fail --retry 3 --retry-delay 5 https://${APP_URL}/api/health || exit 1
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Deployment Failed',
+              body: 'Deployment to DigitalOcean failed. Please check the logs.'
+            })

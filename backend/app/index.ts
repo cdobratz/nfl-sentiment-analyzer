@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { container } from 'tsyringe';
-import express from 'express';
+import express, { Request, Response } from 'express';
 import { TwitterService } from './services/twitter.service';
 import { DataIntegrationService } from './services/data-integration.service';
 import { DataCollectionController } from './controllers/data-collection.controller';
@@ -35,8 +35,12 @@ app.use(express.json());
 const controller = container.resolve(DataCollectionController);
 
 // Routes
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+app.get('/health', (req: Request, res: Response) => {
+  res.json({
+    status: 'healthy',
+    service: 'backend',
+    timestamp: new Date().toISOString()
+  });
 });
 
 app.get('/api/game/:gameId', async (req, res) => {

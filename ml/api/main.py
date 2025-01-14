@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import logging
 from models.sentiment import NFLSentimentAnalyzer
+import datetime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -43,6 +44,15 @@ async def list_models() -> Dict[str, Dict[str, str]]:
     return {
         name: {"description": info["description"]} 
         for name, info in model_registry.items()
+    }
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for the ML service"""
+    return {
+        "status": "healthy",
+        "service": "ml",
+        "timestamp": datetime.datetime.utcnow().isoformat()
     }
 
 @app.post("/analyze", response_model=List[SentimentResponse])
