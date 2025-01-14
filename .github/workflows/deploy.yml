@@ -11,13 +11,9 @@ permissions:
   issues: write
 
 env:
-  DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
   APP_NAME: nfl-analysis
   REGISTRY: registry.digitalocean.com
   REGISTRY_IMAGE: ${{ secrets.REGISTRY_NAME }}
-  ML_IMAGE: "nfl-ml-service"
-  BACKEND_IMAGE: "nfl-backend"
-  APP_URL: "nfl-sentiment-analyzer-jxf4g.ondigitalocean.app"
 
 jobs:
   build_and_push:
@@ -29,15 +25,16 @@ jobs:
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
         with:
-          token: ${{ secrets.DO_API_TOKEN }}
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
       - name: Log in to DO Container Registry
         run: doctl registry login --expiry-seconds 600
 
-      - name: Build and push
-        run: |
-          docker build -t ${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}/${{ env.APP_NAME }}:${{ github.sha }} .
-          docker push ${{ env.REGISTRY }}/${{ env.REGISTRY_IMAGE }}/${{ env.APP_NAME }}:${{ github.sha }}
+      - name: Build container image
+        run: docker build -t $(echo $REGISTRY)/$(echo $REGISTRY_IMAGE)/$(echo $APP_NAME):$(echo $GITHUB_SHA) .
+
+      - name: Push image to DO Container Registry
+        run: docker push $(echo $REGISTRY)/$(echo $REGISTRY_IMAGE)/$(echo $APP_NAME):$(echo $GITHUB_SHA)
 
   deploy:
     needs: build_and_push
@@ -50,13 +47,13 @@ jobs:
         uses: digitalocean/app_action@v1.1.5
         with:
           app_name: ${{ env.APP_NAME }}
-          token: ${{ secrets.DO_API_TOKEN }}
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
           images: |
             [
               {
                 "name": "${{ env.APP_NAME }}",
                 "image": {
-                  "registry": "${{ env.REGISTRY }}",
+                  "registry_type": "DOCR",
                   "repository": "${{ env.REGISTRY_IMAGE }}/${{ env.APP_NAME }}",
                   "tag": "${{ github.sha }}"
                 }
@@ -69,9 +66,9 @@ jobs:
       - name: Run health checks
         run: |
           # Check ML service health
-          curl --fail --retry 3 --retry-delay 5 https://${APP_URL}/ml/health || exit 1
+          curl --fail --retry 3 --retry-delay 5 https://nfl-sentiment-analyzer-jxf4g.ondigitalocean.app/ml/health || exit 1
           # Check Backend service health
-          curl --fail --retry 3 --retry-delay 5 https://${APP_URL}/api/health || exit 1
+          curl --fail --retry 3 --retry-delay 5 https://nfl-sentiment-analyzer-jxf4g.ondigitalocean.app/api/health || exit 1
 
       - name: Notify on failure
         if: failure()
