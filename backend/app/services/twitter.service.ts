@@ -183,7 +183,13 @@ export class TwitterService {
           edit_history_tweet_ids: tweet.edit_history_tweet_ids || [tweet.id || ''],
           author_id: tweet.author_id || '',
           created_at: tweet.created_at || new Date().toISOString(),
-          entities: tweet.entities || {},
+          entities: tweet.entities || {
+            annotations: [],
+            urls: [],
+            hashtags: [],
+            cashtags: [],
+            mentions: []
+          },
           lang: tweet.lang || 'en',
           possibly_sensitive: tweet.possibly_sensitive || false,
           public_metrics: {
