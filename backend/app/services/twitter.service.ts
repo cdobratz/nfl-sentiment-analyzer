@@ -172,30 +172,30 @@ export class TwitterService {
         max_results: 100
       });
 
-      if (!response?.data) {
-        return [];
-      }
-
-      // Handle both array and single tweet responses
-      const tweets = Array.isArray(response.data) ? response.data : [response.data];
+      // Ensure response has data and convert to array if needed
+      const tweets = response?.data ? (Array.isArray(response.data) ? response.data : [response.data]) : [];
       
-      return tweets.map(tweet => ({
-        id: tweet.id,
-        text: tweet.text,
-        edit_history_tweet_ids: tweet.edit_history_tweet_ids || [tweet.id],
-        author_id: tweet.author_id || '',
-        created_at: tweet.created_at || new Date().toISOString(),
-        public_metrics: {
-          retweet_count: tweet.public_metrics?.retweet_count ?? 0,
-          reply_count: tweet.public_metrics?.reply_count ?? 0,
-          like_count: tweet.public_metrics?.like_count ?? 0,
-          quote_count: tweet.public_metrics?.quote_count ?? 0,
-          impression_count: 0
-        },
-        entities: tweet.entities || {},
-        lang: tweet.lang || 'en',
-        possibly_sensitive: tweet.possibly_sensitive || false
-      }));
+      // Map each tweet to ensure it matches TweetV2 interface
+      return tweets.map((tweet: Partial<TweetV2>) => {
+        const tweetV2: TweetV2 = {
+          id: tweet.id || '',
+          text: tweet.text || '',
+          edit_history_tweet_ids: tweet.edit_history_tweet_ids || [tweet.id || ''],
+          author_id: tweet.author_id || '',
+          created_at: tweet.created_at || new Date().toISOString(),
+          entities: tweet.entities || {},
+          lang: tweet.lang || 'en',
+          possibly_sensitive: tweet.possibly_sensitive || false,
+          public_metrics: {
+            retweet_count: tweet.public_metrics?.retweet_count ?? 0,
+            reply_count: tweet.public_metrics?.reply_count ?? 0,
+            like_count: tweet.public_metrics?.like_count ?? 0,
+            quote_count: tweet.public_metrics?.quote_count ?? 0,
+            impression_count: 0
+          }
+        };
+        return tweetV2;
+      });
     } catch (error) {
       this.logger.error('Error searching tweets:', error);
       return [];
