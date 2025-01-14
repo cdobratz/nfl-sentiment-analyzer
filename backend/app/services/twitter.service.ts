@@ -123,8 +123,8 @@ export class TwitterService {
         return [];
       }
 
-      const tweets = response.data;
-      return Array.isArray(tweets) ? tweets : [tweets];
+      // Ensure we handle both array and single tweet responses
+      return Array.isArray(response.data) ? response.data : [response.data];
     } catch (error) {
       this.logger.error('Error searching tweets:', error);
       return [];
