@@ -1,6 +1,6 @@
 import { injectable } from 'tsyringe';
 import { Logger } from 'winston';
-import { TwitterApi, TweetV2, TweetPublicMetricsV2, TweetSearchRecentV2Paginator } from 'twitter-api-v2';
+import { TwitterApi, TweetV2, Tweetv2TimelineResult } from 'twitter-api-v2';
 import NodeCache from 'node-cache';
 import { Tweet, TopTweet } from '../types/twitter.types';
 
@@ -137,7 +137,7 @@ export class TwitterService {
     throw new Error(`Twitter API Error: ${errorMessage}`);
   }
 
-  private mapTwitterMetricsToCustomFormat(metrics: TweetPublicMetricsV2 | undefined | null): CustomMetrics {
+  private mapTwitterMetricsToCustomFormat(metrics: TweetV2['public_metrics'] | undefined | null): CustomMetrics {
     if (!metrics) {
       return {
         retweets: 0,
@@ -176,16 +176,20 @@ export class TwitterService {
         return [];
       }
 
-      // Access the data property first, then map over the tweets
-      const tweets = Array.isArray(timelineResult.data) ? timelineResult.data : [timelineResult.data];
+      // Cast the timeline result to the correct type and get data
+      const timelineData = (timelineResult as TweetV2TimelineResult).data;
       
-      return tweets.map((rawTweet: TweetV2) => ({
+      // Ensure we have an array of tweets
+      const tweetsArray = Array.isArray(timelineData) ? timelineData : [timelineData];
+      
+      // Map the tweets with proper type annotations
+      return tweetsArray.map((rawTweet: TweetV2) => ({
         id: rawTweet.id,
         text: rawTweet.text,
         edit_history_tweet_ids: rawTweet.edit_history_tweet_ids || [rawTweet.id],
         author_id: rawTweet.author_id || '',
         created_at: rawTweet.created_at || new Date().toISOString(),
-        entities: rawTweet.entities || {
+        entities: rawTweet.entities ?? {
           annotations: [],
           urls: [],
           hashtags: [],
