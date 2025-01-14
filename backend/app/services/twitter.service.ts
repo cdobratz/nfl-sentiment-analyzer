@@ -1,6 +1,6 @@
 import { injectable } from 'tsyringe';
 import { Logger } from 'winston';
-import { TwitterApi, TweetV2, Tweetv2TimelineResult } from 'twitter-api-v2';
+import { TwitterApi, TweetV2, TweetSearchRecentV2Paginator } from 'twitter-api-v2';
 import NodeCache from 'node-cache';
 import { Tweet, TopTweet } from '../types/twitter.types';
 
@@ -176,14 +176,11 @@ export class TwitterService {
         return [];
       }
 
-      // Cast the timeline result to the correct type and get data
-      const timelineData = (timelineResult as TweetV2TimelineResult).data;
+      // Access data from paginator and cast to TweetV2[]
+      const timelineData = timelineResult.data as unknown as TweetV2[];
       
-      // Ensure we have an array of tweets
-      const tweetsArray = Array.isArray(timelineData) ? timelineData : [timelineData];
-      
-      // Map the tweets with proper type annotations
-      return tweetsArray.map((rawTweet: TweetV2) => ({
+      // Map each tweet to ensure all required fields are present
+      return timelineData.map((rawTweet: TweetV2) => ({
         id: rawTweet.id,
         text: rawTweet.text,
         edit_history_tweet_ids: rawTweet.edit_history_tweet_ids || [rawTweet.id],
