@@ -1,0 +1,36 @@
+name: Deploy to DigitalOcean
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: "registry.digitalocean.com/nfl-sentiment"
+  IMAGE_NAME: "nfl-sentiment-analyzer"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Log in to DigitalOcean Container Registry
+        run: doctl registry login --expiry-seconds 600
+
+      - name: Update App Platform deployment
+        run: |
+          doctl apps update "${{ secrets.DO_APP_ID }}" --spec .do/app.yaml \
+            --set-env-vars "MONGODB_URI=${{ secrets.MONGODB_URI }}" \
+            --set-env-vars "TWITTER_BEARER_TOKEN=${{ secrets.TWITTER_BEARER_TOKEN }}" \
+            --set-env-vars "TWITTER_API_KEY=${{ secrets.TWITTER_API_KEY }}" \
+            --set-env-vars "TWITTER_API_SECRET=${{ secrets.TWITTER_API_SECRET }}"

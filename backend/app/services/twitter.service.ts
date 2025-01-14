@@ -1,6 +1,6 @@
 import { injectable } from 'tsyringe';
 import { Logger } from 'winston';
-import { TwitterApi, TweetV2, TweetPublicMetricsV2, TwitterApiv2 } from 'twitter-api-v2';
+import { TwitterApi, TweetV2, TweetPublicMetricsV2, TweetSearchRecentV2Paginator } from 'twitter-api-v2';
 import NodeCache from 'node-cache';
 import { Tweet, TopTweet } from '../types/twitter.types';
 
@@ -23,6 +23,50 @@ interface CustomMetrics {
   replies: number;
   likes: number;
   quotes: number;
+}
+
+interface TwitterSearchResponse {
+  data: Array<{
+    id: string;
+    text: string;
+    author_id: string;
+    created_at: string;
+    public_metrics?: {
+      retweet_count: number;
+      reply_count: number;
+      like_count: number;
+      quote_count: number;
+    };
+  }>;
+  includes?: {
+    users?: Array<{
+      id: string;
+      username: string;
+      verified: boolean;
+    }>;
+  };
+}
+
+interface TwitterTimelineResponse {
+  data: {
+    id: string;
+    text: string;
+    author_id?: string;
+    created_at?: string;
+    edit_history_tweet_ids: string[];
+    public_metrics?: {
+      retweet_count: number;
+      reply_count: number;
+      like_count: number;
+      quote_count: number;
+    };
+  }[];
+  meta?: {
+    oldest_id: string;
+    newest_id: string;
+    result_count: number;
+    next_token?: string;
+  };
 }
 
 const NFL_ANALYSTS: Record<string, AnalystInfo> = {
@@ -114,17 +158,44 @@ export class TwitterService {
   private async searchTweets(query: string): Promise<TweetV2[]> {
     try {
       const response = await this.twitterClient.v2.search(query, {
-        'tweet.fields': ['author_id', 'created_at', 'public_metrics'],
-        'user.fields': ['username', 'verified'],
+        'tweet.fields': [
+          'author_id',
+          'created_at',
+          'public_metrics',
+          'edit_history_tweet_ids',
+          'entities',
+          'lang',
+          'possibly_sensitive'
+        ],
+        'user.fields': ['username', 'verified', 'profile_image_url'],
+        'expansions': ['author_id', 'referenced_tweets.id'],
         max_results: 100
       });
 
-      if (!response || !response.data) {
+      if (!response?.data) {
         return [];
       }
 
-      // Ensure we handle both array and single tweet responses
-      return Array.isArray(response.data) ? response.data : [response.data];
+      // Handle both array and single tweet responses
+      const tweets = Array.isArray(response.data) ? response.data : [response.data];
+      
+      return tweets.map(tweet => ({
+        id: tweet.id,
+        text: tweet.text,
+        edit_history_tweet_ids: tweet.edit_history_tweet_ids || [tweet.id],
+        author_id: tweet.author_id || '',
+        created_at: tweet.created_at || new Date().toISOString(),
+        public_metrics: {
+          retweet_count: tweet.public_metrics?.retweet_count ?? 0,
+          reply_count: tweet.public_metrics?.reply_count ?? 0,
+          like_count: tweet.public_metrics?.like_count ?? 0,
+          quote_count: tweet.public_metrics?.quote_count ?? 0,
+          impression_count: 0
+        },
+        entities: tweet.entities || {},
+        lang: tweet.lang || 'en',
+        possibly_sensitive: tweet.possibly_sensitive || false
+      }));
     } catch (error) {
       this.logger.error('Error searching tweets:', error);
       return [];
