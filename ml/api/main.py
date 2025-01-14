@@ -18,33 +18,41 @@ app = FastAPI(title="NFL Sentiment Analysis API")
 model_registry: Dict[str, dict] = {
     "bertweet-base": {
         "model": NFLSentimentAnalyzer(),
-        "description": "BERTweet model fine-tuned for sentiment analysis"
+        "description": "BERTweet model fine-tuned for sentiment analysis",
     }
 }
 
+
 class SentimentScore(BaseModel):
     """Sentiment score model."""
+
     score: float
     confidence: float
 
+
 class SentimentResponse(BaseModel):
     """Response model for sentiment analysis."""
+
     text: str
     sentiment: SentimentScore
     label: str
 
+
 class TextRequest(BaseModel):
     """Request model for sentiment analysis."""
+
     texts: List[str]
     model_name: str = "bertweet-base"
+
 
 @app.get("/models")
 async def list_models() -> Dict[str, Dict[str, str]]:
     """List available models and their descriptions."""
     return {
-        name: {"description": info["description"]} 
+        name: {"description": info["description"]}
         for name, info in model_registry.items()
     }
+
 
 @app.get("/health")
 async def health_check():
@@ -52,8 +60,9 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "ml",
-        "timestamp": datetime.datetime.utcnow().isoformat()
+        "timestamp": datetime.datetime.utcnow().isoformat(),
     }
+
 
 @app.post("/analyze", response_model=List[SentimentResponse])
 async def analyze_texts(request: TextRequest) -> List[SentimentResponse]:
@@ -63,28 +72,32 @@ async def analyze_texts(request: TextRequest) -> List[SentimentResponse]:
         if not model:
             raise HTTPException(
                 status_code=400,
-                detail=f"Model {request.model_name} not found. Available models: {list(model_registry.keys())}"
+                detail=f"Model {request.model_name} not found. Available models: {list(model_registry.keys())}",
             )
 
         results = []
         for text in request.texts:
             try:
                 analysis = await model["model"].analyzer(text)
-                results.append(SentimentResponse(
-                    text=text,
-                    sentiment=SentimentScore(
-                        score=float(analysis["score"]),
-                        confidence=float(analysis["confidence"])
-                    ),
-                    label=analysis["label"]
-                ))
+                results.append(
+                    SentimentResponse(
+                        text=text,
+                        sentiment=SentimentScore(
+                            score=float(analysis["score"]),
+                            confidence=float(analysis["confidence"]),
+                        ),
+                        label=analysis["label"],
+                    )
+                )
             except Exception as e:
                 logger.error(f"Error analyzing text: {text}", exc_info=True)
-                results.append(SentimentResponse(
-                    text=text,
-                    sentiment=SentimentScore(score=0, confidence=0),
-                    label="neutral"
-                ))
+                results.append(
+                    SentimentResponse(
+                        text=text,
+                        sentiment=SentimentScore(score=0, confidence=0),
+                        label="neutral",
+                    )
+                )
 
         return results
 
@@ -94,6 +107,8 @@ async def analyze_texts(request: TextRequest) -> List[SentimentResponse]:
         logger.error("Error processing request", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

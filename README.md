@@ -180,6 +180,31 @@ TWITTER_BEARER_TOKEN=your_twitter_token
 ESPN_API_KEY=your_espn_key
 ```
 
+## Code Style
+
+### Python
+We use [black](https://github.com/psf/black) for consistent Python code formatting. To format your code:
+
+```bash
+# Format all Python files in the project
+black .
+
+# Format a specific file
+black path/to/file.py
+```
+
+Black is configured in the CI pipeline to ensure consistent code style across all contributions. The CI will fail if any Python files don't meet black's formatting standards.
+
+### TypeScript
+We use ESLint with the TypeScript plugin for consistent TypeScript code formatting. To format your code:
+
+```bash
+# Format all TypeScript files in the project
+npm run lint:fix
+```
+
+ESLint is configured in the CI pipeline to ensure consistent code style across all contributions. The CI will fail if any TypeScript files don't meet ESLint's formatting standards.
+
 ## Documentation
 
 Comprehensive documentation for the NFL Sentiment Analyzer project is available in the `/docs` directory:

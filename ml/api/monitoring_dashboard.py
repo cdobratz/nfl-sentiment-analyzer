@@ -9,9 +9,11 @@ app = FastAPI(title="NFL Prediction Model Monitoring")
 evaluator = ModelEvaluator()
 logger = logging.getLogger(__name__)
 
+
 @app.get("/")
 async def root():
     return {"message": "NFL Prediction Model Monitoring API"}
+
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def get_dashboard():
@@ -186,48 +188,52 @@ async def get_dashboard():
     </html>
     """
 
+
 @app.get("/api/metrics")
 async def get_metrics():
     """Get current metrics and visualizations for the dashboard."""
     try:
         # Get metrics history
         metrics_list = evaluator.get_metrics_history()
-        
+
         # Current metrics (or default values if no data)
         current_metrics = evaluator.get_latest_metrics() or {
-            'accuracy': 0.0,
-            'f1': 0.0,
-            'precision': 0.0,
-            'recall': 0.0
+            "accuracy": 0.0,
+            "f1": 0.0,
+            "precision": 0.0,
+            "recall": 0.0,
         }
-        
+
         # Get recent predictions (last 10)
         recent_predictions = metrics_list[-10:] if metrics_list else []
-        
+
         # Get feature importance (mock data for now)
         feature_importance = {
-            'Home Team Win Rate': 0.15,
-            'Away Team Points Scored Avg': 0.12,
-            'Home Team Points Allowed Avg': 0.11,
-            'Analyst Confidence Home': 0.10,
-            'Home Sentiment Score': 0.09,
-            'Away Team Win Rate': 0.08,
-            'Home Team Points Scored Avg': 0.07,
-            'Away Team Points Allowed Avg': 0.07,
-            'Away Sentiment Score': 0.06,
-            'Analyst Confidence Away': 0.05
+            "Home Team Win Rate": 0.15,
+            "Away Team Points Scored Avg": 0.12,
+            "Home Team Points Allowed Avg": 0.11,
+            "Analyst Confidence Home": 0.10,
+            "Home Sentiment Score": 0.09,
+            "Away Team Win Rate": 0.08,
+            "Home Team Points Scored Avg": 0.07,
+            "Away Team Points Allowed Avg": 0.07,
+            "Away Sentiment Score": 0.06,
+            "Analyst Confidence Away": 0.05,
         }
-        
+
         return {
-            'current_metrics': current_metrics,
-            'predictions': recent_predictions,
-            'feature_importance': feature_importance,
-            'prediction_count': len(metrics_list),
-            'last_updated': current_metrics.get('timestamp', datetime.now().isoformat())
+            "current_metrics": current_metrics,
+            "predictions": recent_predictions,
+            "feature_importance": feature_importance,
+            "prediction_count": len(metrics_list),
+            "last_updated": current_metrics.get(
+                "timestamp", datetime.now().isoformat()
+            ),
         }
     except Exception as e:
         logger.error(f"Error getting metrics: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/predictions")
 async def get_predictions(days: int = 7):
@@ -235,13 +241,18 @@ async def get_predictions(days: int = 7):
     try:
         metrics_list = evaluator.get_metrics_history()
         cutoff_date = datetime.now() - timedelta(days=days)
-        
-        recent_metrics = [
-            metric for metric in metrics_list
-            if datetime.fromisoformat(metric['timestamp']) >= cutoff_date
-        ] if metrics_list else []
-        
-        return {'predictions': recent_metrics}
+
+        recent_metrics = (
+            [
+                metric
+                for metric in metrics_list
+                if datetime.fromisoformat(metric["timestamp"]) >= cutoff_date
+            ]
+            if metrics_list
+            else []
+        )
+
+        return {"predictions": recent_metrics}
     except Exception as e:
         logger.error(f"Error getting predictions: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
