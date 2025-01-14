@@ -4,13 +4,14 @@ services:
   - name: backend
     github:
       branch: main
-      repo_clone_url: https://github.com/cdobratz/nfl-sentiment-analyzer.git
-    dockerfile_path: Dockerfile.backend
+      repo: cdobratz/nfl-sentiment-analyzer
+    dockerfile_path: backend/Dockerfile
+    source_dir: backend
     http_port: 3000
     instance_size_slug: basic-xxs
     instance_count: 1
     routes:
-      - path: /api/*
+      - path: /api
     envs:
       - key: NODE_ENV
         value: production
@@ -18,21 +19,27 @@ services:
         value: "${MONGODB_URI}"
       - key: ML_API_URL
         value: ${ml-service.PRIVATE_URL}
-    build_command: docker build -t backend -f Dockerfile.backend .
-    run_command: docker run -p 3000:3000 backend
-
+      - key: TWITTER_BEARER_TOKEN
+        value: "${TWITTER_BEARER_TOKEN}"
+      - key: TWITTER_API_KEY
+        value: "${TWITTER_API_KEY}"
+      - key: TWITTER_API_SECRET
+        value: "${TWITTER_API_SECRET}"
+      - key: TWITTER_DAILY_TWEET_LIMIT
+        value: "50"
+      - key: TWITTER_RATE_LIMIT_WINDOW
+        value: "900000"
   - name: ml-service
     github:
       branch: main
-      repo_clone_url: https://github.com/cdobratz/nfl-sentiment-analyzer.git
-    dockerfile_path: Dockerfile.ml
+      repo: cdobratz/nfl-sentiment-analyzer
+    dockerfile_path: ml/Dockerfile
+    source_dir: ml
     http_port: 8000
     instance_size_slug: basic-xs
     instance_count: 1
     routes:
-      - path: /ml/*
+      - path: /ml
     envs:
       - key: MONGODB_URI
         value: "${MONGODB_URI}"
-    build_command: docker build -t ml-service -f Dockerfile.ml .
-    run_command: docker run -p 8000:8000 ml-service
