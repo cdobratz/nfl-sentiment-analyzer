@@ -171,16 +171,18 @@ export class TwitterService {
         'expansions': ['author_id', 'referenced_tweets.id'],
         max_results: 100
       });
-
+  
       if (!timelineResult?.data) {
         return [];
       }
-
-      // Access data from paginator and cast to TweetV2[]
-      const timelineData = timelineResult.data as unknown as TweetV2[];
-      
-      // Map each tweet to ensure all required fields are present
-      return timelineData.map((rawTweet: TweetV2) => ({
+  
+      // Extract tweets from the paginator
+      const tweets = Array.isArray(timelineResult.data) 
+        ? timelineResult.data 
+        : [timelineResult.data];
+  
+      // Map each tweet to ensure it matches TweetV2 interface
+      return tweets.map(rawTweet => ({
         id: rawTweet.id,
         text: rawTweet.text,
         edit_history_tweet_ids: rawTweet.edit_history_tweet_ids || [rawTweet.id],
@@ -202,12 +204,13 @@ export class TwitterService {
           quote_count: rawTweet.public_metrics?.quote_count ?? 0,
           impression_count: 0
         }
-      }));
+      })) as TweetV2[];
     } catch (error) {
       this.logger.error('Error searching tweets:', error);
       return [];
     }
   }
+
 
   async getGameRelatedTweets(gameId: string, teams: { home: string; away: string }): Promise<Tweet[]> {
     const cacheKey = `game_tweets:${gameId}`;
