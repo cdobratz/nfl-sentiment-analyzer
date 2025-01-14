@@ -30,4 +30,4 @@ jobs:
       env:
         PYTHONPATH: ${{ github.workspace }}/backend
       run: |
-        pytest
+        pytest tests/

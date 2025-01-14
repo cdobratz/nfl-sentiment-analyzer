@@ -26,8 +26,6 @@ jobs:
 
       - name: Update App Platform deployment
         run: |
-          doctl apps update "${{ secrets.DO_APP_ID }}" --spec .do/app.yaml \
-            --set-env-vars "MONGODB_URI=${{ secrets.MONGODB_URI }}" \
-            --set-env-vars "TWITTER_BEARER_TOKEN=${{ secrets.TWITTER_BEARER_TOKEN }}" \
-            --set-env-vars "TWITTER_API_KEY=${{ secrets.TWITTER_API_KEY }}" \
-            --set-env-vars "TWITTER_API_SECRET=${{ secrets.TWITTER_API_SECRET }}"
+          doctl apps update "${{ secrets.DO_APP_ID }}" \
+            --spec .do/app.yaml \
+            --wait
