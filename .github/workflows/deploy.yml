@@ -9,6 +9,10 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+  issues: write
+
 env:
   REGISTRY: "registry.digitalocean.com/nfl-analyzer"
   ML_IMAGE: "nfl-ml-service"
