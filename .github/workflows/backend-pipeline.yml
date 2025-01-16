@@ -62,12 +62,25 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Create model directories
+        working-directory: ./ml
+        run: |
+          mkdir -p models/saved
+          touch models/saved/game_predictor.joblib
+
       - name: Run ML tests with coverage
         working-directory: ./ml
         env:
           PYTHONPATH: ${{ github.workspace }}/ml
+          PYTEST_ADDOPTS: "--no-cov-on-fail"
         run: |
-          pytest tests/ --cov=models --cov-report=xml --asyncio-mode=strict
+          python -m pytest tests/ --cov=models --cov=api --cov-report=xml --asyncio-mode=strict
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./ml/coverage.xml
+          flags: ml-tests
 
   build-and-deploy:
     needs: [test-backend, test-ml]
