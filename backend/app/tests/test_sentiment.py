@@ -12,7 +12,10 @@ def mock_aioresponse():
 @pytest.mark.asyncio
 async def test_sentiment_analyzer(mock_aioresponse):
     mock_url = "http://test-url/analyze"
-    mock_response = {"sentiment": "positive", "score": 0.9}
+    mock_response = [{
+        "label": "positive",
+        "sentiment": {"score": 0.9}
+    }]
     mock_aioresponse.post(mock_url, status=200, payload=mock_response)
 
     analyzer = SentimentAnalyzer(ml_service_url=mock_url)
